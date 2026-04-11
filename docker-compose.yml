@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-etik_kurul_basvuru}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5436}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-etik_kurul_basvuru}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-etik_kurul_basvuru};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      Encryption__Base64Key: ${ENCRYPTION_BASE64_KEY:-MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY=}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-this-signing-key-in-production-123456}
+      VerificationCodes__Length: ${VERIFICATION_CODE_LENGTH:-6}
+      VerificationCodes__ExpiresInMinutes: ${VERIFICATION_CODE_EXPIRES_IN_MINUTES:-10}
+      ApplicationAccess__MinimumProfileCompletionPercent: ${APPLICATION_ACCESS_MIN_PROFILE_COMPLETION_PERCENT:-}
+      Hosting__EnableHttpsRedirection: "false"
+    ports:
+      - "${API_PORT:-8086}:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NGINX_BACKEND_UPSTREAM: http://api:8080
+    ports:
+      - "${FRONTEND_PORT:-3006}:8080"
+
+volumes:
+  postgres-data:

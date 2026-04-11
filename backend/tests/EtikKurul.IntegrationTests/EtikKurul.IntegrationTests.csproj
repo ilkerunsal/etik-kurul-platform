@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="EtikKurul.Api">
+      <HintPath>..\..\src\EtikKurul.Api\bin\$(Configuration)\net10.0\EtikKurul.Api.dll</HintPath>
+    </Reference>
+    <Reference Include="EtikKurul.Infrastructure">
+      <HintPath>..\..\src\EtikKurul.Infrastructure\bin\$(Configuration)\net10.0\EtikKurul.Infrastructure.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BuildIntegrationDependencies" BeforeTargets="ResolveReferences">
+    <MSBuild Projects="..\..\src\EtikKurul.Api\EtikKurul.Api.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\..\src\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\..\src\EtikKurul.Modules.Applications\EtikKurul.Modules.Applications.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <Target Name="CopyApiTestHostAssets" AfterTargets="Build">
+    <ItemGroup>
+      <ApiHostAssets Include="..\..\src\EtikKurul.Api\bin\$(Configuration)\net10.0\EtikKurul.Api.deps.json" />
+      <ApiHostAssets Include="..\..\src\EtikKurul.Api\bin\$(Configuration)\net10.0\EtikKurul.Api.runtimeconfig.json" />
+      <ApiHostAssets Include="..\..\src\EtikKurul.Api\bin\$(Configuration)\net10.0\appsettings.json" />
+      <ApiHostAssets Include="..\..\src\EtikKurul.Api\bin\$(Configuration)\net10.0\appsettings.Development.json" />
+      <ApiHostAssets Include="$(NuGetPackageRoot)microsoft.entityframeworkcore.relational\10.0.0\lib\net10.0\Microsoft.EntityFrameworkCore.Relational.dll" />
+      <ApiHostAssets Include="$(NuGetPackageRoot)npgsql.entityframeworkcore.postgresql\10.0.0\lib\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll" />
+      <ApiHostAssets Include="$(NuGetPackageRoot)npgsql\10.0.0\lib\net10.0\Npgsql.dll" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(ApiHostAssets)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

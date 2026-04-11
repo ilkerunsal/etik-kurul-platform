@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EtikKurul.Api/EtikKurul.Api.csproj" />
+    <Project Path="src/EtikKurul.Infrastructure/EtikKurul.Infrastructure.csproj" />
+    <Project Path="src/EtikKurul.Modules.IdentityVerification/EtikKurul.Modules.IdentityVerification.csproj" />
+    <Project Path="src/EtikKurul.Modules.UserProfiles/EtikKurul.Modules.UserProfiles.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EtikKurul.IntegrationTests/EtikKurul.IntegrationTests.csproj" />
+    <Project Path="tests/EtikKurul.UnitTests/EtikKurul.UnitTests.csproj" />
+  </Folder>
+</Solution>

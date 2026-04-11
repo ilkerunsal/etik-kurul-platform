@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseProjectReferences Condition="'$(UseProjectReferences)' == ''">false</UseProjectReferences>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' == 'true'">
+    <ProjectReference Include="..\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" />
+    <ProjectReference Include="..\EtikKurul.Modules.UserProfiles\EtikKurul.Modules.UserProfiles.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' != 'true'">
+    <Reference Include="EtikKurul.Infrastructure">
+      <HintPath>..\EtikKurul.Infrastructure\bin\$(Configuration)\net10.0\EtikKurul.Infrastructure.dll</HintPath>
+    </Reference>
+    <Reference Include="EtikKurul.Modules.UserProfiles">
+      <HintPath>..\EtikKurul.Modules.UserProfiles\bin\$(Configuration)\net10.0\EtikKurul.Modules.UserProfiles.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BuildModuleDependencies" BeforeTargets="ResolveReferences" Condition="'$(UseProjectReferences)' != 'true'">
+    <MSBuild Projects="..\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\EtikKurul.Modules.UserProfiles\EtikKurul.Modules.UserProfiles.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+  </Target>
+</Project>

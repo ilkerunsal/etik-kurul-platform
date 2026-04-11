@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+    <UseProjectReferences Condition="'$(UseProjectReferences)' == ''">false</UseProjectReferences>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json;appsettings.Development.json;appsettings.Docker.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' == 'true'">
+    <ProjectReference Include="..\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" />
+    <ProjectReference Include="..\EtikKurul.Modules.Applications\EtikKurul.Modules.Applications.csproj" />
+    <ProjectReference Include="..\EtikKurul.Modules.IdentityVerification\EtikKurul.Modules.IdentityVerification.csproj" />
+    <ProjectReference Include="..\EtikKurul.Modules.UserProfiles\EtikKurul.Modules.UserProfiles.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' != 'true'">
+    <Reference Include="EtikKurul.Infrastructure">
+      <HintPath>..\EtikKurul.Infrastructure\bin\$(Configuration)\net10.0\EtikKurul.Infrastructure.dll</HintPath>
+    </Reference>
+    <Reference Include="EtikKurul.Modules.Applications">
+      <HintPath>..\EtikKurul.Modules.Applications\bin\$(Configuration)\net10.0\EtikKurul.Modules.Applications.dll</HintPath>
+    </Reference>
+    <Reference Include="EtikKurul.Modules.IdentityVerification">
+      <HintPath>..\EtikKurul.Modules.IdentityVerification\bin\$(Configuration)\net10.0\EtikKurul.Modules.IdentityVerification.dll</HintPath>
+    </Reference>
+    <Reference Include="EtikKurul.Modules.UserProfiles">
+      <HintPath>..\EtikKurul.Modules.UserProfiles\bin\$(Configuration)\net10.0\EtikKurul.Modules.UserProfiles.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BuildModuleDependencies" BeforeTargets="ResolveReferences" Condition="'$(UseProjectReferences)' != 'true'">
+    <MSBuild Projects="..\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\EtikKurul.Modules.Applications\EtikKurul.Modules.Applications.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\EtikKurul.Modules.IdentityVerification\EtikKurul.Modules.IdentityVerification.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\EtikKurul.Modules.UserProfiles\EtikKurul.Modules.UserProfiles.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <Target Name="CopyInfrastructureProviderAssets" AfterTargets="Build">
+    <ItemGroup>
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)microsoft.entityframeworkcore.inmemory\10.0.0\lib\net10.0\Microsoft.EntityFrameworkCore.InMemory.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)microsoft.entityframeworkcore.relational\10.0.0\lib\net10.0\Microsoft.EntityFrameworkCore.Relational.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)npgsql.entityframeworkcore.postgresql\10.0.0\lib\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)npgsql\10.0.0\lib\net10.0\Npgsql.dll" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(InfrastructureProviderAssets)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyInfrastructureProviderAssetsToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)microsoft.entityframeworkcore.inmemory\10.0.0\lib\net10.0\Microsoft.EntityFrameworkCore.InMemory.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)microsoft.entityframeworkcore.relational\10.0.0\lib\net10.0\Microsoft.EntityFrameworkCore.Relational.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)npgsql.entityframeworkcore.postgresql\10.0.0\lib\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll" />
+      <InfrastructureProviderAssets Include="$(NuGetPackageRoot)npgsql\10.0.0\lib\net10.0\Npgsql.dll" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(InfrastructureProviderAssets)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
