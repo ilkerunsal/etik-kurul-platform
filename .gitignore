@@ -1,6 +1,9 @@
 .env
 .env.local
 .env.*.local
+.dotnet-cli/
+.dotnet-home/
+.nuget/
 
 **/bin/
 **/obj/
@@ -13,6 +16,8 @@
 **/node_modules/
 **/dist/
 **/.vite/
+**/.dotnet-home/
+**/.nuget/
 
 **/.DS_Store
 **/Thumbs.db
