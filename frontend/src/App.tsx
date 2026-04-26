@@ -62,40 +62,16 @@ import {
   createActivity,
   createRoleDemoRegisterForm,
   findLatestMessage,
-  formatApplicationAccess,
-  formatApplicationRouteStatus,
-  formatApplicationStep,
-  formatApplicationSubmitStatus,
   formatDate,
-  formatExpertWorkflowStatus,
-  formatProbeStatus,
   mapProfileToForm,
-  statusDescriptions,
-  statusLabels,
-  tokenPreview,
 } from "./app/formatters";
-import { ActivityFeed } from "./components/ActivityFeed";
+import { getInitialWorkflowView, type WorkflowStep, type WorkflowView } from "./app/workflow";
 import { AuthGateway } from "./components/AuthGateway";
-import { MessagePreview } from "./components/MessagePreview";
-import { StatusBadge } from "./components/StatusBadge";
-
-type WorkflowView = "identity" | "profile" | "application" | "review";
-
-function getInitialWorkflowView(snapshot: SnapshotState): WorkflowView {
-  if (snapshot.sessionToken && snapshot.committeeDecisionState === "Approved") {
-    return "review";
-  }
-
-  if (snapshot.sessionToken && snapshot.applicationCreateStatus === 201) {
-    return "application";
-  }
-
-  if (snapshot.sessionToken || snapshot.accountStatus === "active") {
-    return "profile";
-  }
-
-  return "identity";
-}
+import { HeroPanel } from "./components/HeroPanel";
+import { IdentityWorkflow } from "./components/workflows/IdentityWorkflow";
+import { ProfileWorkflow } from "./components/workflows/ProfileWorkflow";
+import { SessionWorkflow } from "./components/workflows/SessionWorkflow";
+import { WorkflowOverview } from "./components/workflows/WorkflowOverview";
 
 export default function App() {
   const snapshot = loadSnapshot();
@@ -164,7 +140,7 @@ export default function App() {
   const profileDone = (profileCompletionPercent ?? 0) >= 100;
   const applicationDone = !!currentApplication || applicationCreateStatus === 201;
   const reviewDone = currentApplication?.currentStep === "Approved" || committeeDecisionState === "Approved";
-  const workflowSteps = [
+  const workflowSteps: WorkflowStep[] = [
     {
       id: "identity" as const,
       number: "01",
@@ -199,22 +175,6 @@ export default function App() {
     },
   ];
   const activeWorkflowStep = workflowSteps.find((step) => step.id === workflowView) ?? workflowSteps[0];
-  const sessionPanelTitle =
-    workflowView === "profile"
-      ? "Oturum ve profil yetkisi"
-      : workflowView === "application"
-        ? "Basvuru hazirligi"
-        : "Inceleme ve kurul sureci";
-  const sessionPanelDescription =
-    workflowView === "profile"
-      ? "Aktif hesapla login olun, profil bilgisini yukleyin ve CanOpenApplication policy durumunu kontrol edin."
-      : workflowView === "application"
-        ? "Profil esigi gecildikten sonra taslak, intake, komite, form, dokuman, validation ve submit adimlarini calistirin."
-        : "Submit sonrasi uzman, sekretarya, paket, gundem, revizyon ve kurul karari akisini calistirin.";
-  const showSessionPanel = workflowView !== "identity";
-  const showLoginAction = workflowView === "profile" || !hasSession;
-  const showApplicationActions = workflowView === "application" || workflowView === "review";
-  const showPolicyProbeAction = workflowView === "profile" || workflowView === "application";
 
   useEffect(() => {
     const payload: SnapshotState = {
@@ -1127,33 +1087,17 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="hero-column">
-        <div className="hero-panel">
-          <span className="eyebrow">Etik Kurul Basvuru Sistemi</span>
-          <h1>Faz 1 durum merkezi</h1>
-          <p className="hero-copy">Kayit, NVI kontrolu, iletisim onayi, profil tamamlama, JWT oturumu ve ilk basvuru taslagi akisini tek ekranda yonetin.</p>
-          <div className="hero-metrics">
-            <div><span>Durum</span><strong>{accountStatus ? statusLabels[accountStatus] : "Baslangic"}</strong></div>
-            <div><span>Profil</span><strong>{profileCompletionPercent === null ? "Henus yok" : `%${profileCompletionPercent}`}</strong></div>
-            <div><span>Kullanici</span><strong>{userId ? `${userId.slice(0, 8)}...` : "Olusmadi"}</strong></div>
-            <div><span>Basvuru</span><strong>{formatApplicationAccess(currentUser?.applicationAccess)}</strong></div>
-          </div>
-          <div className="hero-note">
-            <StatusBadge accountStatus={accountStatus} />
-            <p>{accountStatus ? statusDescriptions[accountStatus] : "Adimlari sirayla tamamlayin."}</p>
-            <small>Mock NVI basarisiz ornegi icin TCKN olarak 00000000000 kullanabilirsiniz.</small>
-          </div>
-          <div className="verification-strip">
-            <div><span>Email</span><strong>{emailVerified ? "Onayli" : "Bekliyor"}</strong></div>
-            <div><span>SMS</span><strong>{phoneVerified ? "Onayli" : "Bekliyor"}</strong></div>
-            <div><span>JWT</span><strong>{hasSession ? "Hazir" : "Yok"}</strong></div>
-          </div>
-          <div className="activity-panel">
-            <div className="section-heading"><span>Son olaylar</span><button type="button" className="button button--ghost" onClick={resetWorkflow}>Akisi sifirla</button></div>
-            <ActivityFeed activity={deferredActivity} />
-          </div>
-        </div>
-      </aside>
+      <HeroPanel
+        accountStatus={accountStatus}
+        activity={deferredActivity}
+        applicationAccess={currentUser?.applicationAccess}
+        emailVerified={emailVerified}
+        hasSession={hasSession}
+        phoneVerified={phoneVerified}
+        profileCompletionPercent={profileCompletionPercent}
+        userId={userId}
+        onResetWorkflow={resetWorkflow}
+      />
       <main className="workspace">
         <div className="workspace-header">
           <div><span className="eyebrow">Moduler monolit istemci</span><h2>Kimlik, profil, oturum ve basvuru operasyonlari</h2></div>
@@ -1167,188 +1111,97 @@ export default function App() {
           </button>
         </div>
         {banner ? <section className={`banner banner--${banner.tone}`}><strong>{banner.title}</strong><p>{banner.detail}</p></section> : null}
-        <section className="workflow-overview" aria-label="Basvuru akis adimlari">
-          <div>
-            <span className="eyebrow">Aktif akis</span>
-            <h2>{activeWorkflowStep.title}</h2>
-            <p>{activeWorkflowStep.description}</p>
-          </div>
-          <nav className="workflow-steps" aria-label="Basvuru akis adimlari">
-            {workflowSteps.map((step) => (
-              <button
-                key={step.id}
-                type="button"
-                className={`workflow-step${workflowView === step.id ? " workflow-step--active" : ""}${step.done ? " workflow-step--done" : ""}`}
-                disabled={!step.enabled}
-                onClick={() => setWorkflowView(step.id)}
-                aria-current={workflowView === step.id ? "step" : undefined}
-              >
-                <span>{step.number}</span>
-                <strong>{step.title}</strong>
-                <small>{step.done ? "Tamamlandi" : step.enabled ? "Devam" : "Kilitli"}</small>
-              </button>
-            ))}
-          </nav>
-        </section>
+        <WorkflowOverview
+          activeStep={activeWorkflowStep}
+          steps={workflowSteps}
+          workflowView={workflowView}
+          onSelectWorkflow={setWorkflowView}
+        />
         <div className="panel-grid">
           {workflowView === "identity" ? (
-            <>
-              <section className="panel panel--form">
-            <div className="section-heading"><span>01</span><div><h3>Kayit formu</h3><p>Kullanici ve sifre bilgilerini toplayip hesabin ilk kaydini olusturur.</p></div></div>
-            <form className="form-grid" onSubmit={handleRegister}>
-              <label className="field"><span>Ad</span><input required value={registerForm.firstName} onChange={(event) => setRegisterForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
-              <label className="field"><span>Soyad</span><input required value={registerForm.lastName} onChange={(event) => setRegisterForm((current) => ({ ...current, lastName: event.target.value }))} /></label>
-              <label className="field"><span>TCKN</span><input required pattern="\d{11}" inputMode="numeric" value={registerForm.tckn} onChange={(event) => setRegisterForm((current) => ({ ...current, tckn: event.target.value }))} /></label>
-              <label className="field"><span>Dogum tarihi</span><input required placeholder="1990-01-01" pattern="\d{4}-\d{2}-\d{2}" value={registerForm.birthDate} onChange={(event) => setRegisterForm((current) => ({ ...current, birthDate: event.target.value }))} /></label>
-              <label className="field"><span>Email</span><input required type="email" value={registerForm.email} onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))} /></label>
-              <label className="field"><span>Telefon</span><input required value={registerForm.phone} onChange={(event) => setRegisterForm((current) => ({ ...current, phone: event.target.value }))} /></label>
-              <label className="field field--full"><span>Sifre</span><input required type="password" value={registerForm.password} onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))} /></label>
-              <div className="actions field--full"><button type="submit" className="button" disabled={busyAction === "register"}>{busyAction === "register" ? "Kaydediliyor" : "Kaydi olustur"}</button><small>Basarili kayit sonrasi varsayilan researcher rolu atanir.</small></div>
-            </form>
-          </section>
-          <section className="panel panel--accent">
-            <div className="section-heading"><span>02</span><div><h3>NVI dogrulama</h3><p>Sifrelenmis TCKN ve dogum tarihi backend tarafinda cozulup mock provider ile eslestirilir.</p></div></div>
-            <div className="identity-summary">
-              <div><span>Kullanici Id</span><strong>{userId || "Kayit bekleniyor"}</strong></div>
-              <div><span>Son provider kodu</span><strong>{identityResponseCode ?? "Calismadi"}</strong></div>
-            </div>
-            <button type="button" className="button" disabled={!canVerifyIdentity || busyAction === "verify-identity"} onClick={handleVerifyIdentity}>{busyAction === "verify-identity" ? "Dogrulaniyor" : "Kimlik dogrulamayi baslat"}</button>
-          </section>
-          <section className="panel panel--wide">
-            <div className="section-heading"><span>03</span><div><h3>Iletisim kodlari</h3><p>Mock email ve SMS kutulari gelistirme amacli okunur. Kodlari tek tikla alana yerlestirebilirsiniz.</p></div></div>
-            <div className="channel-grid">
-              <div className="channel-card">
-                <div className="channel-card__header"><div><h4>Email onayi</h4><span>{emailVerified ? "Onaylandi" : "Bekliyor"}</span></div><button type="button" className="button button--ghost" disabled={!canManageContacts || busyAction === "send-email"} onClick={() => void handleSendCode("email")}>{busyAction === "send-email" ? "Gonderiliyor" : "Yeni email kodu"}</button></div>
-                <MessagePreview channelType="email" message={latestEmailMessage} onUseCode={(channelType, code) => setCodes((current) => ({ ...current, [channelType]: code }))} />
-                <div className="inline-form"><input placeholder="Email kodu" value={codes.email} onChange={(event) => setCodes((current) => ({ ...current, email: event.target.value }))} /><button type="button" className="button" disabled={!canManageContacts || !codes.email || busyAction === "confirm-email"} onClick={() => void handleConfirmCode("email")}>{busyAction === "confirm-email" ? "Onaylaniyor" : "Email kodunu onayla"}</button></div>
-              </div>
-              <div className="channel-card">
-                <div className="channel-card__header"><div><h4>SMS onayi</h4><span>{phoneVerified ? "Onaylandi" : "Bekliyor"}</span></div><button type="button" className="button button--ghost" disabled={!canManageContacts || busyAction === "send-sms"} onClick={() => void handleSendCode("sms")}>{busyAction === "send-sms" ? "Gonderiliyor" : "Yeni SMS kodu"}</button></div>
-                <MessagePreview channelType="sms" message={latestSmsMessage} onUseCode={(channelType, code) => setCodes((current) => ({ ...current, [channelType]: code }))} />
-                <div className="inline-form"><input placeholder="SMS kodu" value={codes.sms} onChange={(event) => setCodes((current) => ({ ...current, sms: event.target.value }))} /><button type="button" className="button" disabled={!canManageContacts || !codes.sms || busyAction === "confirm-sms"} onClick={() => void handleConfirmCode("sms")}>{busyAction === "confirm-sms" ? "Onaylaniyor" : "SMS kodunu onayla"}</button></div>
-              </div>
-            </div>
-          </section>
-            </>
+            <IdentityWorkflow
+              busyAction={busyAction}
+              canManageContacts={canManageContacts}
+              canVerifyIdentity={canVerifyIdentity}
+              codes={codes}
+              emailVerified={emailVerified}
+              identityResponseCode={identityResponseCode}
+              latestEmailMessage={latestEmailMessage}
+              latestSmsMessage={latestSmsMessage}
+              phoneVerified={phoneVerified}
+              registerForm={registerForm}
+              userId={userId}
+              onConfirmCode={(channelType) => void handleConfirmCode(channelType)}
+              onRegister={handleRegister}
+              onSendCode={(channelType) => void handleSendCode(channelType)}
+              onVerifyIdentity={() => void handleVerifyIdentity()}
+              setCodes={setCodes}
+              setRegisterForm={setRegisterForm}
+            />
           ) : null}
           {workflowView === "profile" ? (
-            <section className="panel panel--form panel--wide">
-            <div className="section-heading"><span>04</span><div><h3>Profil olusturma</h3><p>E-imza ve KEP dahil Faz 1 profil alanlarini doldurur. Aktif JWT oturumu varsa mevcut profil otomatik yuklenir ve ayni formdan guncellenebilir.</p></div></div>
-            <form className="form-grid" onSubmit={handleCreateProfile}>
-              <label className="field"><span>Akademik unvan</span><input value={profileForm.academicTitle} onChange={(event) => setProfileForm((current) => ({ ...current, academicTitle: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>Derece duzeyi</span><input value={profileForm.degreeLevel} onChange={(event) => setProfileForm((current) => ({ ...current, degreeLevel: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>Kurum</span><input value={profileForm.institutionName} onChange={(event) => setProfileForm((current) => ({ ...current, institutionName: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>Fakulte</span><input value={profileForm.facultyName} onChange={(event) => setProfileForm((current) => ({ ...current, facultyName: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>Bolum</span><input value={profileForm.departmentName} onChange={(event) => setProfileForm((current) => ({ ...current, departmentName: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>Pozisyon</span><input value={profileForm.positionTitle} onChange={(event) => setProfileForm((current) => ({ ...current, positionTitle: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field field--full"><span>Biyografi</span><textarea rows={4} value={profileForm.biography} onChange={(event) => setProfileForm((current) => ({ ...current, biography: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field field--full"><span>Uzmanlik ozeti</span><textarea rows={4} value={profileForm.specializationSummary} onChange={(event) => setProfileForm((current) => ({ ...current, specializationSummary: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>KEP adresi</span><input value={profileForm.kepAddress} onChange={(event) => setProfileForm((current) => ({ ...current, kepAddress: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field"><span>CV dokuman Id</span><input placeholder="00000000-0000-0000-0000-000000000000" pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" value={profileForm.cvDocumentId} onChange={(event) => setProfileForm((current) => ({ ...current, cvDocumentId: event.target.value }))} disabled={!canCreateProfile} /></label>
-              <label className="field field--toggle"><span>E-imza mevcut</span><input type="checkbox" checked={profileForm.hasESignature} onChange={(event) => setProfileForm((current) => ({ ...current, hasESignature: event.target.checked }))} disabled={!canCreateProfile} /></label>
-              <div className="actions field--full"><button type="submit" className="button" disabled={!canCreateProfile || busyAction === "create-profile" || busyAction === "update-profile"}>{busyAction === "create-profile" || busyAction === "update-profile" ? "Kaydediliyor" : hasExistingProfile ? "Profili guncelle" : "Profili olustur"}</button><small>{!hasSession ? "Profil kaydi icin once login olun." : hasExistingProfile ? `Mevcut profil yuklendi. Guncel oran: %${profileCompletionPercent ?? 0}` : profileCompletionPercent === null ? "Profil orani backend cevabindan doner." : `Guncel tamamlanma orani: %${profileCompletionPercent}`}</small></div>
-            </form>
-          </section>
+            <ProfileWorkflow
+              busyAction={busyAction}
+              canCreateProfile={canCreateProfile}
+              hasExistingProfile={hasExistingProfile}
+              hasSession={hasSession}
+              profileCompletionPercent={profileCompletionPercent}
+              profileForm={profileForm}
+              onCreateProfile={handleCreateProfile}
+              setProfileForm={setProfileForm}
+            />
           ) : null}
-          {showSessionPanel ? (
-            <section className="panel panel--accent panel--wide">
-            <div className="section-heading"><span>{workflowView === "profile" ? "05" : workflowView === "application" ? "03" : "04"}</span><div><h3>{sessionPanelTitle}</h3><p>{sessionPanelDescription}</p></div></div>
-            <div className="form-grid">
-              <label className="field"><span>Email veya telefon</span><input value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} /></label>
-              <label className="field"><span>Sifre</span><input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
-            </div>
-            <div className="actions actions--cluster">
-              {showLoginAction ? <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={() => void handleLogin()}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button> : null}
-              <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={() => void handleFetchSession()}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
-              {showApplicationActions ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={() => void handleFetchApplications()}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button> : null}
-              {showPolicyProbeAction ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={() => void handleProbeApplicationAccess()}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button> : null}
-              {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "create-application"} onClick={() => void handleCreateApplicationRoute()}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
-              {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={() => void handleRunExpertWorkflow()}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
-              <button type="button" className="button button--ghost" disabled={!hasSession} onClick={handleLogout}>Oturumu temizle</button>
-            </div>
-            <div className="session-stack">
-              <div className="message-preview">
-                <div className="message-preview__header"><span>Access token</span><strong>{hasSession ? "Hazir" : "Yok"}</strong></div>
-                <p className="token-preview">{tokenPreview(sessionToken)}</p>
-                <small>{sessionExpiresAt ? `Gecerlilik bitisi: ${formatDate(sessionExpiresAt)}` : "Henuz token uretilmedi."}</small>
-              </div>
-              <div className="message-preview">
-                <div className="message-preview__header"><span>Me yaniti</span><strong>{currentUser ? currentUser.email : "Okunmadi"}</strong></div>
-                {currentUser ? (
-                  <div className="meta-list">
-                    <div><span>Ad Soyad</span><strong>{`${currentUser.firstName} ${currentUser.lastName}`}</strong></div>
-                    <div><span>Roller</span><strong>{currentUser.roles.join(", ") || "Yok"}</strong></div>
-                    <div><span>Durum</span><strong>{statusLabels[currentUser.accountStatus]}</strong></div>
-                    <div><span>Profil</span><strong>{currentUser.profileCompletionPercent === null ? "Yok" : `%${currentUser.profileCompletionPercent}`}</strong></div>
-                    <div><span>Basvuru erisimi</span><strong>{formatApplicationAccess(currentUser.applicationAccess)}</strong></div>
-                    <div><span>Esik</span><strong>{currentUser.applicationAccess.minimumProfileCompletionPercent === null ? "Tanimli degil" : `%${currentUser.applicationAccess.minimumProfileCompletionPercent}`}</strong></div>
-                    <div><span>Probe</span><strong>{formatProbeStatus(applicationProbeStatus, applicationProbeState)}</strong></div>
-                    <div><span>Create</span><strong>{formatApplicationRouteStatus(applicationCreateStatus, applicationCreateState)}</strong></div>
-                    <div><span>Submit</span><strong>{formatApplicationSubmitStatus(applicationSubmitStatus, applicationSubmitState)}</strong></div>
-                    <div><span>Queue</span><strong>{expertQueueCount ?? "Calismadi"}</strong></div>
-                    <div><span>Assign</span><strong>{formatExpertWorkflowStatus(expertAssignmentStatus, expertAssignmentState)}</strong></div>
-                    <div><span>Review</span><strong>{formatExpertWorkflowStatus(expertReviewStatus, expertReviewState)}</strong></div>
-                    <div><span>Revision response</span><strong>{formatExpertWorkflowStatus(revisionResponseStatus, revisionResponseState)}</strong></div>
-                    <div><span>Decision</span><strong>{formatExpertWorkflowStatus(expertDecisionStatus, expertDecisionState)}</strong></div>
-                    <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
-                    <div><span>Agenda queue</span><strong>{agendaQueueCount ?? "Calismadi"}</strong></div>
-                    <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
-                    <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
-                    <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
-                    <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
-                  </div>
-                ) : (
-                  <p>Login sonrasinda bu panelden korumali kullanici ozeti gorunur.</p>
-                )}
-              </div>
-              {workflowView !== "profile" ? (
-                <div className="message-preview">
-                <div className="message-preview__header"><span>Basvuru demosu</span><strong>{currentApplication ? currentApplication.applicationId.slice(0, 8) : "Calismadi"}</strong></div>
-                {currentApplication ? (
-                  <div className="meta-list">
-                    <div><span>Baslik</span><strong>{currentApplication.title ?? "Adsiz taslak"}</strong></div>
-                    <div><span>Durum</span><strong>{currentApplication.status}</strong></div>
-                    <div><span>Adim</span><strong>{formatApplicationStep(currentApplication.currentStep)}</strong></div>
-                    <div><span>Entry mode</span><strong>{currentApplication.entryMode ?? "Yok"}</strong></div>
-                    <div><span>Submitted at</span><strong>{currentApplication.submittedAt ? formatDate(currentApplication.submittedAt) : "Henuz gonderilmedi"}</strong></div>
-                    <div><span>Komiteler</span><strong>{applicationCommitteeCount ?? 0}</strong></div>
-                    <div><span>Validation</span><strong>{applicationValidation ? (applicationValidation.isValid ? "Passed" : "Blocked") : "Bekliyor"}</strong></div>
-                    <div><span>Checklist</span><strong>{applicationValidation?.items.length ?? 0}</strong></div>
-                    <div><span>Expert assign</span><strong>{formatExpertWorkflowStatus(expertAssignmentStatus, expertAssignmentState)}</strong></div>
-                    <div><span>Expert review</span><strong>{formatExpertWorkflowStatus(expertReviewStatus, expertReviewState)}</strong></div>
-                    <div><span>Revision response</span><strong>{formatExpertWorkflowStatus(revisionResponseStatus, revisionResponseState)}</strong></div>
-                    <div><span>Expert decision</span><strong>{formatExpertWorkflowStatus(expertDecisionStatus, expertDecisionState)}</strong></div>
-                    <div><span>Package queue</span><strong>{packageQueueCount ?? "Calismadi"}</strong></div>
-                    <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
-                    <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
-                    <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
-                    <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
-                    <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
-                  </div>
-                ) : (
-                  <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yanitlari, uzman onayi, paketleme, kurul gundemi ve kurul onayini calistirir.</p>
-                )}
-              </div>
-              ) : null}
-              {workflowView !== "profile" ? (
-                <div className="message-preview">
-                <div className="message-preview__header"><span>Basvurularim</span><strong>{myApplications.length}</strong></div>
-                {myApplications.length > 0 ? (
-                  <div className="meta-list">
-                    {myApplications.slice(0, 4).map((application) => (
-                      <div key={application.applicationId}>
-                        <span>{application.title ?? application.applicationId.slice(0, 8)}</span>
-                        <strong>{`${application.status} / ${formatApplicationStep(application.currentStep)}`}</strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p>Login sonrasi bu panel kullanicinin draft veya submit edilmis basvurularini listeler.</p>
-                )}
-              </div>
-              ) : null}
-            </div>
-          </section>
+          {workflowView !== "identity" ? (
+            <SessionWorkflow
+              agendaQueueCount={agendaQueueCount}
+              agendaState={agendaState}
+              agendaStatus={agendaStatus}
+              applicationCommitteeCount={applicationCommitteeCount}
+              applicationCreateState={applicationCreateState}
+              applicationCreateStatus={applicationCreateStatus}
+              applicationProbeState={applicationProbeState}
+              applicationProbeStatus={applicationProbeStatus}
+              applicationSubmitState={applicationSubmitState}
+              applicationSubmitStatus={applicationSubmitStatus}
+              applicationValidation={applicationValidation}
+              busyAction={busyAction}
+              committeeDecisionState={committeeDecisionState}
+              committeeDecisionStatus={committeeDecisionStatus}
+              committeeRevisionResponseState={committeeRevisionResponseState}
+              committeeRevisionResponseStatus={committeeRevisionResponseStatus}
+              committeeRevisionState={committeeRevisionState}
+              committeeRevisionStatus={committeeRevisionStatus}
+              currentApplication={currentApplication}
+              currentUser={currentUser}
+              expertAssignmentState={expertAssignmentState}
+              expertAssignmentStatus={expertAssignmentStatus}
+              expertDecisionState={expertDecisionState}
+              expertDecisionStatus={expertDecisionStatus}
+              expertQueueCount={expertQueueCount}
+              expertReviewState={expertReviewState}
+              expertReviewStatus={expertReviewStatus}
+              hasSession={hasSession}
+              loginIdentifier={loginIdentifier}
+              loginPassword={loginPassword}
+              myApplications={myApplications}
+              packageQueueCount={packageQueueCount}
+              packageState={packageState}
+              packageStatus={packageStatus}
+              revisionResponseState={revisionResponseState}
+              revisionResponseStatus={revisionResponseStatus}
+              sessionExpiresAt={sessionExpiresAt}
+              sessionToken={sessionToken}
+              workflowView={workflowView}
+              onCreateApplicationRoute={() => void handleCreateApplicationRoute()}
+              onFetchApplications={() => void handleFetchApplications()}
+              onFetchSession={() => void handleFetchSession()}
+              onLogin={() => void handleLogin()}
+              onLogout={handleLogout}
+              onProbeApplicationAccess={() => void handleProbeApplicationAccess()}
+              onRunExpertWorkflow={() => void handleRunExpertWorkflow()}
+              setLoginIdentifier={setLoginIdentifier}
+              setLoginPassword={setLoginPassword}
+            />
           ) : null}
         </div>
       </main>
