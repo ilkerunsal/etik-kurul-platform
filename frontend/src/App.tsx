@@ -59,6 +59,12 @@ import {
   type SnapshotState,
 } from "./app/demoState";
 import {
+  validateContactCode,
+  validateLoginFields,
+  validateProfileForm,
+  validateRegisterForm,
+} from "./app/formValidation";
+import {
   createActivity,
   createRoleDemoRegisterForm,
   findLatestMessage,
@@ -453,6 +459,18 @@ export default function App() {
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const registerIssues = validateRegisterForm(registerForm);
+
+    if (registerIssues.length > 0) {
+      setBanner({
+        tone: "neutral",
+        title: "Kayit bilgileri tamamlanmadi",
+        detail: registerIssues.join(" "),
+      });
+      pushActivity("Kayit formu eksik bilgi nedeniyle API'ye gonderilmedi.", "neutral");
+      return;
+    }
+
     setBusyAction("register");
 
     try {
@@ -534,6 +552,16 @@ export default function App() {
       return;
     }
 
+    if (!canManageContacts) {
+      setBanner({
+        tone: "neutral",
+        title: "Kod gonderimi henuz acik degil",
+        detail: "Yeni kod uretmek icin hesap contact_pending veya active durumunda olmalidir.",
+      });
+      pushActivity("Kod uretimi durum kontrolu nedeniyle engellendi.", "neutral");
+      return;
+    }
+
     setBusyAction(channelType === "email" ? "send-email" : "send-sms");
 
     try {
@@ -555,7 +583,18 @@ export default function App() {
   }
 
   async function handleConfirmCode(channelType: ContactChannelType) {
-    if (!userId || !codes[channelType]) {
+    if (!userId) {
+      return;
+    }
+
+    const codeIssues = validateContactCode(codes[channelType]);
+    if (codeIssues.length > 0) {
+      setBanner({
+        tone: "neutral",
+        title: "Kod alani bos",
+        detail: codeIssues.join(" "),
+      });
+      pushActivity("Kod onayi bos alan nedeniyle API'ye gonderilmedi.", "neutral");
       return;
     }
 
@@ -587,6 +626,33 @@ export default function App() {
   async function handleCreateProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionToken) {
+      setBanner({
+        tone: "neutral",
+        title: "Profil icin oturum gerekli",
+        detail: "Aktif JWT oturumu olmadan POST /profile veya PUT /profile/me cagrisi yapilmaz.",
+      });
+      pushActivity("Profil kaydi oturum olmadigi icin API'ye gonderilmedi.", "neutral");
+      return;
+    }
+
+    if (!canCreateProfile && !hasExistingProfile) {
+      setBanner({
+        tone: "neutral",
+        title: "Profil kaydi henuz acik degil",
+        detail: "Profil olusturmak icin hesap active durumunda ve kullanici login olmus olmalidir.",
+      });
+      pushActivity("Profil kaydi hesap durumu nedeniyle engellendi.", "neutral");
+      return;
+    }
+
+    const profileIssues = validateProfileForm(profileForm);
+    if (profileIssues.length > 0) {
+      setBanner({
+        tone: "neutral",
+        title: "Profil formati duzeltilmeli",
+        detail: profileIssues.join(" "),
+      });
+      pushActivity("Profil formu bicim kontrolunden gecemedi.", "neutral");
       return;
     }
 
@@ -631,6 +697,18 @@ export default function App() {
   }
 
   async function handleLogin() {
+    const loginIssues = validateLoginFields(loginIdentifier, loginPassword);
+
+    if (loginIssues.length > 0) {
+      setBanner({
+        tone: "neutral",
+        title: "Giris bilgileri eksik",
+        detail: loginIssues.join(" "),
+      });
+      pushActivity("Login formu eksik bilgi nedeniyle API'ye gonderilmedi.", "neutral");
+      return;
+    }
+
     setBusyAction("login");
 
     try {

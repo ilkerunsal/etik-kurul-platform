@@ -1,7 +1,9 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import type { BusyAction } from "../../app/demoState";
+import { validateRegisterForm } from "../../app/formValidation";
 import type { ContactChannelType, MockMessageResponse, RegisterForm } from "../../types";
 import { MessagePreview } from "../MessagePreview";
+import { ValidationSummary } from "../ValidationSummary";
 
 interface IdentityWorkflowProps {
   busyAction: BusyAction | null;
@@ -42,6 +44,9 @@ export function IdentityWorkflow({
   setCodes,
   setRegisterForm,
 }: IdentityWorkflowProps) {
+  const registerIssues = validateRegisterForm(registerForm);
+  const registerReady = registerIssues.length === 0;
+
   return (
     <>
       <section className="panel panel--form">
@@ -53,13 +58,19 @@ export function IdentityWorkflow({
           </div>
         </div>
         <form className="form-grid" onSubmit={onRegister}>
-          <label className="field"><span>Ad</span><input required value={registerForm.firstName} onChange={(event) => setRegisterForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
-          <label className="field"><span>Soyad</span><input required value={registerForm.lastName} onChange={(event) => setRegisterForm((current) => ({ ...current, lastName: event.target.value }))} /></label>
-          <label className="field"><span>TCKN</span><input required pattern="\d{11}" inputMode="numeric" value={registerForm.tckn} onChange={(event) => setRegisterForm((current) => ({ ...current, tckn: event.target.value }))} /></label>
-          <label className="field"><span>Dogum tarihi</span><input required placeholder="1990-01-01" pattern="\d{4}-\d{2}-\d{2}" value={registerForm.birthDate} onChange={(event) => setRegisterForm((current) => ({ ...current, birthDate: event.target.value }))} /></label>
-          <label className="field"><span>Email</span><input required type="email" value={registerForm.email} onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))} /></label>
-          <label className="field"><span>Telefon</span><input required value={registerForm.phone} onChange={(event) => setRegisterForm((current) => ({ ...current, phone: event.target.value }))} /></label>
-          <label className="field field--full"><span>Sifre</span><input required type="password" value={registerForm.password} onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))} /></label>
+          <ValidationSummary
+            items={registerIssues}
+            title="Kayit kontrol listesi"
+            tone={registerReady ? "success" : "neutral"}
+            emptyMessage="Kayit bilgileri API istegi icin hazir."
+          />
+          <label className="field"><span>Ad</span><input required aria-invalid={!registerForm.firstName} value={registerForm.firstName} onChange={(event) => setRegisterForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
+          <label className="field"><span>Soyad</span><input required aria-invalid={!registerForm.lastName} value={registerForm.lastName} onChange={(event) => setRegisterForm((current) => ({ ...current, lastName: event.target.value }))} /></label>
+          <label className="field"><span>TCKN</span><input required aria-invalid={!/^\d{11}$/.test(registerForm.tckn)} pattern="\d{11}" inputMode="numeric" value={registerForm.tckn} onChange={(event) => setRegisterForm((current) => ({ ...current, tckn: event.target.value }))} /><small className="field-hint">11 hane, yalnizca sayi. Duz metin saklanmaz.</small></label>
+          <label className="field"><span>Dogum tarihi</span><input required aria-invalid={!/^\d{4}-\d{2}-\d{2}$/.test(registerForm.birthDate)} placeholder="1990-01-01" pattern="\d{4}-\d{2}-\d{2}" value={registerForm.birthDate} onChange={(event) => setRegisterForm((current) => ({ ...current, birthDate: event.target.value }))} /><small className="field-hint">YYYY-AA-GG formatinda, backend'de sifreli tutulur.</small></label>
+          <label className="field"><span>Email</span><input required aria-invalid={!registerForm.email} type="email" value={registerForm.email} onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))} /></label>
+          <label className="field"><span>Telefon</span><input required aria-invalid={!registerForm.phone} value={registerForm.phone} onChange={(event) => setRegisterForm((current) => ({ ...current, phone: event.target.value }))} /></label>
+          <label className="field field--full"><span>Sifre</span><input required aria-invalid={!registerForm.password} type="password" value={registerForm.password} onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))} /><small className="field-hint">En az 8 karakter, buyuk harf, kucuk harf ve rakam.</small></label>
           <div className="actions field--full">
             <button type="submit" className="button" disabled={busyAction === "register"}>{busyAction === "register" ? "Kaydediliyor" : "Kaydi olustur"}</button>
             <small>Basarili kayit sonrasi varsayilan researcher rolu atanir.</small>

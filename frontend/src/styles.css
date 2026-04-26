@@ -330,6 +330,43 @@ button {
   border-color: rgba(27, 107, 109, 0.24);
 }
 
+.validation-summary {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.validation-summary strong {
+  display: block;
+}
+
+.validation-summary ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.validation-summary li + li {
+  margin-top: 4px;
+}
+
+.validation-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.validation-summary--success {
+  border-color: rgba(18, 99, 78, 0.22);
+  background: rgba(18, 99, 78, 0.08);
+}
+
+.validation-summary--error {
+  border-color: rgba(165, 64, 53, 0.24);
+  background: rgba(165, 64, 53, 0.08);
+}
+
 .panel-grid {
   margin-top: 24px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -391,6 +428,16 @@ button {
   outline: none;
   border-color: rgba(188, 97, 48, 0.6);
   transform: translateY(-1px);
+}
+
+.field input[aria-invalid="true"]:focus,
+.field textarea[aria-invalid="true"]:focus,
+.inline-form input[aria-invalid="true"]:focus {
+  border-color: rgba(165, 64, 53, 0.68);
+}
+
+.field-hint {
+  color: var(--muted);
 }
 
 .field--toggle {
@@ -688,6 +735,58 @@ button {
   margin: 14px 0;
 }
 
+.completion-card {
+  margin-top: 20px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(18, 99, 78, 0.08), rgba(255, 255, 255, 0.62)),
+    rgba(255, 255, 255, 0.48);
+}
+
+.completion-card .eyebrow {
+  color: var(--success);
+}
+
+.completion-card__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.completion-card__header strong {
+  display: block;
+  margin-top: 6px;
+  font-family: "Newsreader", serif;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  line-height: 0.9;
+}
+
+.completion-card__header small {
+  max-width: 34ch;
+  color: var(--muted);
+  text-align: right;
+}
+
+.completion-meter {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(31, 23, 16, 0.08);
+}
+
+.completion-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--success), #35a07c);
+  transition: width 0.28s ease;
+}
+
 .session-stack {
   margin-top: 18px;
   display: grid;
@@ -813,11 +912,16 @@ button {
 
   .workspace-header,
   .actions,
+  .completion-card__header,
   .message-preview__header,
   .message-preview__footer,
   .section-heading {
     flex-direction: column;
     align-items: start;
+  }
+
+  .completion-card__header small {
+    text-align: left;
   }
 
   .button,

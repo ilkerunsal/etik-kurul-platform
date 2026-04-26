@@ -1,6 +1,8 @@
 import type { BannerState, BusyAction } from "../app/demoState";
+import { validateLoginFields, validateRegisterForm } from "../app/formValidation";
 import type { AuthMode } from "../app/workflow";
 import type { RegisterForm } from "../types";
+import { ValidationSummary } from "./ValidationSummary";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 
 interface AuthGatewayProps {
@@ -32,6 +34,10 @@ export function AuthGateway({
   setLoginPassword,
   setRegisterForm,
 }: AuthGatewayProps) {
+  const loginIssues = validateLoginFields(loginIdentifier, loginPassword);
+  const registerIssues = validateRegisterForm(registerForm);
+  const registerReady = registerIssues.length === 0;
+
   return (
     <main className="auth-shell">
       <section className="auth-hero">
@@ -86,10 +92,17 @@ export function AuthGateway({
               <h2>Panele devam et</h2>
               <p>Aktif hesabinla giris yap; profil ve basvuru durumun otomatik yuklenir.</p>
             </div>
+            <ValidationSummary
+              items={loginIssues}
+              title="Giris kontrol listesi"
+              tone={loginIssues.length > 0 ? "neutral" : "success"}
+              emptyMessage="Giris icin gerekli alanlar hazir."
+            />
             <label className="field field--full">
               <span>Email veya telefon</span>
               <input
                 required
+                aria-invalid={!loginIdentifier}
                 value={loginIdentifier}
                 onChange={(event) => setLoginIdentifier(event.target.value)}
               />
@@ -98,6 +111,7 @@ export function AuthGateway({
               <span>Sifre</span>
               <input
                 required
+                aria-invalid={!loginPassword}
                 type="password"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
@@ -121,10 +135,17 @@ export function AuthGateway({
               <h2>Kayit baslat</h2>
               <p>Kayit sonrasi NVI, e-posta ve SMS dogrulama adimlarina yonlendirileceksin.</p>
             </div>
+            <ValidationSummary
+              items={registerIssues}
+              title="Kayit kontrol listesi"
+              tone={registerReady ? "success" : "neutral"}
+              emptyMessage="Kayit bilgileri API istegi icin hazir."
+            />
             <label className="field">
               <span>Ad</span>
               <input
                 required
+                aria-invalid={!registerForm.firstName}
                 value={registerForm.firstName}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, firstName: event.target.value }))}
               />
@@ -133,6 +154,7 @@ export function AuthGateway({
               <span>Soyad</span>
               <input
                 required
+                aria-invalid={!registerForm.lastName}
                 value={registerForm.lastName}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, lastName: event.target.value }))}
               />
@@ -141,26 +163,31 @@ export function AuthGateway({
               <span>TCKN</span>
               <input
                 required
+                aria-invalid={!/^\d{11}$/.test(registerForm.tckn)}
                 inputMode="numeric"
                 pattern="\d{11}"
                 value={registerForm.tckn}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, tckn: event.target.value }))}
               />
+              <small className="field-hint">11 hane, yalnizca sayi. Duz metin saklanmaz.</small>
             </label>
             <label className="field">
               <span>Dogum tarihi</span>
               <input
                 required
+                aria-invalid={!/^\d{4}-\d{2}-\d{2}$/.test(registerForm.birthDate)}
                 placeholder="1990-01-01"
                 pattern="\d{4}-\d{2}-\d{2}"
                 value={registerForm.birthDate}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, birthDate: event.target.value }))}
               />
+              <small className="field-hint">YYYY-AA-GG formatinda, backend'de sifreli tutulur.</small>
             </label>
             <label className="field">
               <span>Email</span>
               <input
                 required
+                aria-invalid={!registerForm.email}
                 type="email"
                 value={registerForm.email}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
@@ -170,6 +197,7 @@ export function AuthGateway({
               <span>Telefon</span>
               <input
                 required
+                aria-invalid={!registerForm.phone}
                 value={registerForm.phone}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, phone: event.target.value }))}
               />
@@ -178,10 +206,12 @@ export function AuthGateway({
               <span>Sifre</span>
               <input
                 required
+                aria-invalid={!registerForm.password}
                 type="password"
                 value={registerForm.password}
                 onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))}
               />
+              <small className="field-hint">En az 8 karakter, buyuk harf, kucuk harf ve rakam.</small>
             </label>
             <div className="actions field--full">
               <button type="submit" className="button" disabled={busyAction === "register"}>
