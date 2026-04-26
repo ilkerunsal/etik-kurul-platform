@@ -15,6 +15,37 @@ namespace EtikKurul.Api.Controllers;
 [Route("applications")]
 public class ApplicationsController(IApplicationService applicationService) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType<IReadOnlyList<ApplicationSummaryResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<IReadOnlyList<ApplicationSummaryResponse>>> ListMine(CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var results = await applicationService.ListMineAsync(userId, cancellationToken);
+        return Ok(results.Select(MapSummary).ToList());
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType<ApplicationSummaryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApplicationSummaryResponse>> GetById(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.GetOwnedAsync(userId, id, cancellationToken);
+        return Ok(MapSummary(result));
+    }
+
     [Authorize(Policy = ApplicationPolicies.CanOpenApplication)]
     [HttpPost]
     [ProducesResponseType<ApplicationSummaryResponse>(StatusCodes.Status201Created)]
@@ -231,6 +262,54 @@ public class ApplicationsController(IApplicationService applicationService) : Co
                 .ToList()));
     }
 
+    [HttpPost("{id:guid}/submit")]
+    [ProducesResponseType<ApplicationSummaryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApplicationSummaryResponse>> Submit(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.SubmitAsync(new SubmitApplicationCommand(userId, id), cancellationToken);
+        return Ok(MapSummary(result));
+    }
+
+    [HttpPost("{id:guid}/revision-response")]
+    [ProducesResponseType<ApplicationRevisionResponseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApplicationRevisionResponseResponse>> SubmitRevisionResponse(
+        [FromRoute] Guid id,
+        [FromBody] SubmitApplicationRevisionResponseRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.SubmitRevisionResponseAsync(
+            new SubmitApplicationRevisionResponseCommand(userId, id, request.ResponseNote),
+            cancellationToken);
+
+        return Ok(new ApplicationRevisionResponseResponse(
+            result.RevisionResponseId,
+            result.ApplicationId,
+            result.ExpertReviewDecisionId,
+            result.SubmittedByUserId,
+            result.ResponseNote,
+            result.CreatedAt,
+            MapSummary(result.Application)));
+    }
+
     private static string GetJsonPayloadOrDefault(JsonElement element, string fallback)
         => element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
             ? fallback
@@ -246,6 +325,7 @@ public class ApplicationsController(IApplicationService applicationService) : Co
             result.CommitteeId,
             result.CommitteeSelectionSource,
             result.RoutingConfidence,
+            result.SubmittedAt,
             result.Title,
             result.Summary);
 }

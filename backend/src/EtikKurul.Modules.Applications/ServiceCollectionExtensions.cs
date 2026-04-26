@@ -10,6 +10,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ApplicationValidationBaseEvaluator>();
         services.AddScoped<IApplicationService, ApplicationService>();
+        services.AddScoped<IApplicationExpertWorkflowService, ApplicationExpertWorkflowService>();
+        services.AddScoped<IApplicationCommitteeWorkflowService, ApplicationCommitteeWorkflowService>();
         return services;
     }
 }

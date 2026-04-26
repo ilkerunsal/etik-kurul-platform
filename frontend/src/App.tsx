@@ -1,9 +1,19 @@
 import { startTransition, useDeferredValue, useEffect, useState, type FormEvent } from "react";
 import {
   addApplicationDocument,
+  addApplicationToCommitteeAgenda,
+  assignApplicationExpert,
+  assignDevelopmentRole,
+  approveExpertReview,
   confirmCode,
   createApplication,
   createProfile,
+  fetchApplication,
+  fetchApplicationPackageQueue,
+  fetchCommitteeAgendaQueue,
+  fetchExpertAssignmentQueue,
+  fetchMyApplications,
+  fetchMyExpertAssignments,
   fetchCommittees,
   fetchCurrentProfile,
   fetchCurrentUser,
@@ -12,12 +22,17 @@ import {
   isApiErrorStatus,
   loginUser,
   probeApplicationAccess,
+  prepareApplicationPackage,
   registerUser,
+  requestExpertRevision,
   saveApplicationForm,
   saveApplicationIntake,
   sendCode,
   selectApplicationCommittee,
   setApplicationEntryMode,
+  startExpertReview,
+  submitApplicationRevisionResponse,
+  submitApplication,
   updateProfile,
   validateApplication,
   verifyIdentity,
@@ -37,7 +52,7 @@ import type {
   SessionUserResponse,
 } from "./types";
 
-const STORAGE_KEY = "etik-kurul-phase1-ui:v3";
+const STORAGE_KEY = "etik-kurul-phase1-ui:v4";
 
 const emptyRegisterForm: RegisterForm = {
   firstName: "",
@@ -103,8 +118,10 @@ type BusyAction =
   | "update-profile"
   | "login"
   | "fetch-session"
+  | "fetch-applications"
   | "probe-application"
-  | "create-application";
+  | "create-application"
+  | "run-expert-flow";
 
 interface BannerState {
   tone: "success" | "error" | "neutral";
@@ -135,6 +152,23 @@ interface SnapshotState {
   applicationProbeState: string | null;
   applicationCreateStatus: number | null;
   applicationCreateState: string | null;
+  applicationSubmitStatus: number | null;
+  applicationSubmitState: string | null;
+  expertQueueCount: number | null;
+  expertAssignmentStatus: number | null;
+  expertAssignmentState: string | null;
+  expertReviewStatus: number | null;
+  expertReviewState: string | null;
+  revisionResponseStatus: number | null;
+  revisionResponseState: string | null;
+  expertDecisionStatus: number | null;
+  expertDecisionState: string | null;
+  packageQueueCount: number | null;
+  packageStatus: number | null;
+  packageState: string | null;
+  agendaQueueCount: number | null;
+  agendaStatus: number | null;
+  agendaState: string | null;
 }
 
 function createDefaultSnapshot(): SnapshotState {
@@ -161,6 +195,23 @@ function createDefaultSnapshot(): SnapshotState {
     applicationProbeState: null,
     applicationCreateStatus: null,
     applicationCreateState: null,
+    applicationSubmitStatus: null,
+    applicationSubmitState: null,
+    expertQueueCount: null,
+    expertAssignmentStatus: null,
+    expertAssignmentState: null,
+    expertReviewStatus: null,
+    expertReviewState: null,
+    revisionResponseStatus: null,
+    revisionResponseState: null,
+    expertDecisionStatus: null,
+    expertDecisionState: null,
+    packageQueueCount: null,
+    packageStatus: null,
+    packageState: null,
+    agendaQueueCount: null,
+    agendaStatus: null,
+    agendaState: null,
   };
 }
 
@@ -207,6 +258,23 @@ function loadSnapshot(): SnapshotState {
       applicationProbeState: parsed.applicationProbeState ?? null,
       applicationCreateStatus: parsed.applicationCreateStatus ?? null,
       applicationCreateState: parsed.applicationCreateState ?? null,
+      applicationSubmitStatus: parsed.applicationSubmitStatus ?? null,
+      applicationSubmitState: parsed.applicationSubmitState ?? null,
+      expertQueueCount: parsed.expertQueueCount ?? null,
+      expertAssignmentStatus: parsed.expertAssignmentStatus ?? null,
+      expertAssignmentState: parsed.expertAssignmentState ?? null,
+      expertReviewStatus: parsed.expertReviewStatus ?? null,
+      expertReviewState: parsed.expertReviewState ?? null,
+      revisionResponseStatus: parsed.revisionResponseStatus ?? null,
+      revisionResponseState: parsed.revisionResponseState ?? null,
+      expertDecisionStatus: parsed.expertDecisionStatus ?? null,
+      expertDecisionState: parsed.expertDecisionState ?? null,
+      packageQueueCount: parsed.packageQueueCount ?? null,
+      packageStatus: parsed.packageStatus ?? null,
+      packageState: parsed.packageState ?? null,
+      agendaQueueCount: parsed.agendaQueueCount ?? null,
+      agendaStatus: parsed.agendaStatus ?? null,
+      agendaState: parsed.agendaState ?? null,
     };
   } catch {
     return createDefaultSnapshot();
@@ -246,6 +314,36 @@ function mapProfileToForm(profile: CurrentProfileResponse): ProfileForm {
     hasESignature: profile.hasESignature,
     kepAddress: profile.kepAddress ?? "",
     cvDocumentId: profile.cvDocumentId ?? "",
+  };
+}
+
+function formatExpertWorkflowStatus(status: number | null, state: string | null): string {
+  if (status === null) {
+    return "Calistirilmadi";
+  }
+
+  if (status === 200) {
+    return state ?? "Tamamlandi";
+  }
+
+  return `${status}`;
+}
+
+function createRoleDemoRegisterForm(label: string): RegisterForm {
+  const seed = `${Date.now()}${Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0")}`;
+  const tckn = `7${seed.slice(-10)}`;
+  const suffix = seed.slice(-6);
+
+  return {
+    firstName: label,
+    lastName: "Demo",
+    tckn,
+    birthDate: "1990-01-01",
+    email: `${label.toLowerCase()}+${suffix}@example.com`,
+    phone: `+90555${tckn.slice(-7)}`,
+    password: "StrongPass123!",
   };
 }
 
@@ -293,6 +391,22 @@ function formatApplicationRouteStatus(status: number | null, state: string | nul
   }
 
   if (status === 403) {
+    return "blocked";
+  }
+
+  return `${status}`;
+}
+
+function formatApplicationSubmitStatus(status: number | null, state: string | null): string {
+  if (status === null) {
+    return "Calistirilmadi";
+  }
+
+  if (status === 200) {
+    return state ?? "Submitted";
+  }
+
+  if (status === 400) {
     return "blocked";
   }
 
@@ -398,7 +512,25 @@ export default function App() {
   const [applicationProbeState, setApplicationProbeState] = useState<string | null>(snapshot.applicationProbeState);
   const [applicationCreateStatus, setApplicationCreateStatus] = useState<number | null>(snapshot.applicationCreateStatus);
   const [applicationCreateState, setApplicationCreateState] = useState<string | null>(snapshot.applicationCreateState);
+  const [applicationSubmitStatus, setApplicationSubmitStatus] = useState<number | null>(snapshot.applicationSubmitStatus);
+  const [applicationSubmitState, setApplicationSubmitState] = useState<string | null>(snapshot.applicationSubmitState);
+  const [expertQueueCount, setExpertQueueCount] = useState<number | null>(snapshot.expertQueueCount);
+  const [expertAssignmentStatus, setExpertAssignmentStatus] = useState<number | null>(snapshot.expertAssignmentStatus);
+  const [expertAssignmentState, setExpertAssignmentState] = useState<string | null>(snapshot.expertAssignmentState);
+  const [expertReviewStatus, setExpertReviewStatus] = useState<number | null>(snapshot.expertReviewStatus);
+  const [expertReviewState, setExpertReviewState] = useState<string | null>(snapshot.expertReviewState);
+  const [revisionResponseStatus, setRevisionResponseStatus] = useState<number | null>(snapshot.revisionResponseStatus);
+  const [revisionResponseState, setRevisionResponseState] = useState<string | null>(snapshot.revisionResponseState);
+  const [expertDecisionStatus, setExpertDecisionStatus] = useState<number | null>(snapshot.expertDecisionStatus);
+  const [expertDecisionState, setExpertDecisionState] = useState<string | null>(snapshot.expertDecisionState);
+  const [packageQueueCount, setPackageQueueCount] = useState<number | null>(snapshot.packageQueueCount);
+  const [packageStatus, setPackageStatus] = useState<number | null>(snapshot.packageStatus);
+  const [packageState, setPackageState] = useState<string | null>(snapshot.packageState);
+  const [agendaQueueCount, setAgendaQueueCount] = useState<number | null>(snapshot.agendaQueueCount);
+  const [agendaStatus, setAgendaStatus] = useState<number | null>(snapshot.agendaStatus);
+  const [agendaState, setAgendaState] = useState<string | null>(snapshot.agendaState);
   const [currentApplication, setCurrentApplication] = useState<ApplicationSummaryResponse | null>(null);
+  const [myApplications, setMyApplications] = useState<ApplicationSummaryResponse[]>([]);
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
   const [applicationCommitteeCount, setApplicationCommitteeCount] = useState<number | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
@@ -436,6 +568,23 @@ export default function App() {
       applicationProbeState,
       applicationCreateStatus,
       applicationCreateState,
+      applicationSubmitStatus,
+      applicationSubmitState,
+      expertQueueCount,
+      expertAssignmentStatus,
+      expertAssignmentState,
+      expertReviewStatus,
+      expertReviewState,
+      revisionResponseStatus,
+      revisionResponseState,
+      expertDecisionStatus,
+      expertDecisionState,
+      packageQueueCount,
+      packageStatus,
+      packageState,
+      agendaQueueCount,
+      agendaStatus,
+      agendaState,
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -455,6 +604,23 @@ export default function App() {
     applicationProbeStatus,
     applicationCreateState,
     applicationCreateStatus,
+    expertAssignmentState,
+    expertAssignmentStatus,
+    expertDecisionState,
+    expertDecisionStatus,
+    expertQueueCount,
+    expertReviewState,
+    expertReviewStatus,
+    agendaQueueCount,
+    agendaState,
+    agendaStatus,
+    packageQueueCount,
+    packageState,
+    packageStatus,
+    revisionResponseState,
+    revisionResponseStatus,
+    applicationSubmitState,
+    applicationSubmitStatus,
     phoneVerified,
     profileCompletionPercent,
     profileForm,
@@ -514,6 +680,26 @@ export default function App() {
     });
   }
 
+  async function loadApplications(accessToken: string, focusApplicationId?: string | null) {
+    const applications = await fetchMyApplications(accessToken);
+    let focusedApplication = applications[0] ?? null;
+
+    if (focusApplicationId) {
+      try {
+        focusedApplication = await fetchApplication(accessToken, focusApplicationId);
+      } catch (error) {
+        if (!isApiErrorStatus(error, 404)) {
+          throw error;
+        }
+      }
+    }
+
+    startTransition(() => {
+      setMyApplications(applications);
+      setCurrentApplication(focusedApplication);
+    });
+  }
+
   useEffect(() => {
     if (!sessionToken) {
       return;
@@ -527,7 +713,10 @@ export default function App() {
           return;
         }
 
-        await refreshSessionState(sessionToken);
+        await Promise.all([
+          refreshSessionState(sessionToken),
+          loadApplications(sessionToken, currentApplication?.applicationId ?? null),
+        ]);
       } catch (error) {
         if (cancelled) {
           return;
@@ -584,7 +773,19 @@ export default function App() {
       setApplicationProbeState(null);
       setApplicationCreateStatus(null);
       setApplicationCreateState(null);
+      setApplicationSubmitStatus(null);
+      setApplicationSubmitState(null);
+      setExpertQueueCount(null);
+      setExpertAssignmentStatus(null);
+      setExpertAssignmentState(null);
+      setExpertReviewStatus(null);
+      setExpertReviewState(null);
+      setRevisionResponseStatus(null);
+      setRevisionResponseState(null);
+      setExpertDecisionStatus(null);
+      setExpertDecisionState(null);
       setCurrentApplication(null);
+      setMyApplications([]);
       setApplicationValidation(null);
       setApplicationCommitteeCount(null);
       setSessionToken("");
@@ -729,6 +930,7 @@ export default function App() {
       setSessionExpiresAt(response.expiresAt);
       applyUserSnapshot(response.user);
       setUserId(response.user.userId);
+      await loadApplications(response.accessToken, currentApplication?.applicationId ?? null);
       setBanner({ tone: "success", title: "Oturum acildi", detail: "JWT token olusturuldu. Artik /auth/me sorgusu yapabilirsiniz." });
       pushActivity("JWT tabanli oturum baslatildi.", "success");
     } catch (error) {
@@ -747,12 +949,38 @@ export default function App() {
     setBusyAction("fetch-session");
 
     try {
-      await refreshSessionState(sessionToken);
+      await Promise.all([
+        refreshSessionState(sessionToken),
+        loadApplications(sessionToken, currentApplication?.applicationId ?? null),
+      ]);
       setBanner({ tone: "neutral", title: "Oturum bilgisi yenilendi", detail: "Korumali /auth/me ve /profile/me endpointleri aktif session ile cevap verdi." });
       pushActivity("Session endpointleri basariyla okundu.", "neutral");
     } catch (error) {
       setBanner({ tone: "error", title: "Me sorgusu basarisiz", detail: getErrorMessage(error) });
       pushActivity("Me endpointi okunamadi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleFetchApplications() {
+    if (!sessionToken) {
+      return;
+    }
+
+    setBusyAction("fetch-applications");
+
+    try {
+      await loadApplications(sessionToken, currentApplication?.applicationId ?? null);
+      setBanner({
+        tone: "neutral",
+        title: "Basvurular yenilendi",
+        detail: "Kullaniciya ait basvuru listesi ve secili basvuru ozeti guncellendi.",
+      });
+      pushActivity("GET /applications ve GET /applications/{id} basariyla okundu.", "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Basvuru listesi okunamadi", detail: getErrorMessage(error) });
+      pushActivity("Basvuru listeleme istegi basarisiz oldu.", "error");
     } finally {
       setBusyAction(null);
     }
@@ -849,7 +1077,7 @@ export default function App() {
         },
       );
 
-      const documentResponse = await addApplicationDocument(
+      await addApplicationDocument(
         sessionToken,
         createdApplication.applicationId,
         {
@@ -864,35 +1092,42 @@ export default function App() {
       );
 
       const validationResponse = await validateApplication(sessionToken, createdApplication.applicationId);
-      const finalApplication: ApplicationSummaryResponse = {
-        ...documentResponse.application,
-        status: validationResponse.status,
-        currentStep: validationResponse.currentStep,
-      };
+      const finalApplication = validationResponse.isValid
+        ? await submitApplication(sessionToken, createdApplication.applicationId)
+        : await fetchApplication(sessionToken, createdApplication.applicationId);
+      const applications = await fetchMyApplications(sessionToken);
 
       startTransition(() => {
         setApplicationCommitteeCount(committees.length);
+        setMyApplications(applications);
         setCurrentApplication(finalApplication);
         setApplicationValidation(validationResponse);
       });
       setApplicationCreateStatus(201);
-      setApplicationCreateState(validationResponse.currentStep);
+      setApplicationCreateState(createdApplication.currentStep);
+      setApplicationSubmitStatus(validationResponse.isValid ? 200 : 400);
+      setApplicationSubmitState(finalApplication.currentStep);
       setBanner({
         tone: "success",
         title: "Basvuru akisi tamamlandi",
         detail: validationResponse.isValid
-          ? "Taslak olusturuldu ve validation tabani gecti."
+          ? "Taslak olusturuldu, sistem dogrulamasini gecti ve uzman kuyruguna gonderildi."
           : "Taslak olusturuldu fakat validation tabani bloklandi.",
       });
       pushActivity(
-        `Applications akisi create -> entry mode -> intake -> committee -> form -> document -> validate ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`,
+        validationResponse.isValid
+          ? `Applications akisi create -> entry mode -> intake -> committee -> form -> document -> validate -> submit ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`
+          : `Applications akisi create -> entry mode -> intake -> committee -> form -> document -> validate ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`,
         validationResponse.isValid ? "success" : "neutral",
       );
     } catch (error) {
       if (isApiErrorStatus(error, 403)) {
         setApplicationCreateStatus(403);
         setApplicationCreateState("blocked");
+        setApplicationSubmitStatus(null);
+        setApplicationSubmitState(null);
         setCurrentApplication(null);
+        setMyApplications([]);
         setApplicationValidation(null);
         setApplicationCommitteeCount(null);
         setBanner({
@@ -910,13 +1145,179 @@ export default function App() {
     }
   }
 
+  async function provisionRoleSession(roleCode: "secretariat" | "ethics_expert", label: string) {
+    const demoUser = createRoleDemoRegisterForm(label);
+    const registerResponse = await registerUser(demoUser);
+    await verifyIdentity(registerResponse.userId);
+
+    const mockInbox = await fetchMockMessages(demoUser.email, demoUser.phone);
+    const emailMessage = findLatestMessage(mockInbox, "email");
+
+    if (!emailMessage?.code) {
+      throw new Error(`${label} demo kullanicisi icin email dogrulama kodu bulunamadi.`);
+    }
+
+    await confirmCode(registerResponse.userId, "email", emailMessage.code);
+    await assignDevelopmentRole(registerResponse.userId, roleCode);
+
+    const loginResponse = await loginUser(demoUser.email, demoUser.password);
+    return {
+      email: demoUser.email,
+      userId: registerResponse.userId,
+      accessToken: loginResponse.accessToken,
+    };
+  }
+
+  async function handleRunExpertWorkflow() {
+    const applicationId = currentApplication?.applicationId;
+    const applicationStep = currentApplication?.currentStep;
+
+    if (!sessionToken || !applicationId || !applicationStep) {
+      return;
+    }
+
+    if (applicationStep !== "WaitingExpertAssignment") {
+      setBanner({
+        tone: "neutral",
+        title: "Uzman atama akisina hazir degil",
+        detail: "Bu demo yalnizca WaitingExpertAssignment adimindaki basvurular icin calistirilir.",
+      });
+      pushActivity("Uzman atama demosu uygun olmayan adimda cagrildi.", "neutral");
+      return;
+    }
+
+    setBusyAction("run-expert-flow");
+
+    try {
+      const secretariatSession = await provisionRoleSession("secretariat", "Secretariat");
+      const expertSession = await provisionRoleSession("ethics_expert", "Expert");
+
+      const queue = await fetchExpertAssignmentQueue(secretariatSession.accessToken);
+      const queuedApplication = queue.find((application) => application.applicationId === applicationId);
+
+      if (!queuedApplication) {
+        throw new Error("Secretariat kuyrugunda secili basvuru bulunamadi.");
+      }
+
+      const assignment = await assignApplicationExpert(
+        secretariatSession.accessToken,
+        applicationId,
+        expertSession.userId,
+      );
+
+      const expertAssignments = await fetchMyExpertAssignments(expertSession.accessToken);
+      const myAssignment = expertAssignments.find((item) => item.applicationId === applicationId);
+
+      if (!myAssignment) {
+        throw new Error("Uzmanin atanan is listesinde secili basvuru bulunamadi.");
+      }
+
+      const review = await startExpertReview(expertSession.accessToken, applicationId);
+      const revisionRequest = await requestExpertRevision(
+        expertSession.accessToken,
+        applicationId,
+        "UI demo revizyon talebi.",
+      );
+      const revisionResponse = await submitApplicationRevisionResponse(
+        sessionToken,
+        applicationId,
+        "UI demo revizyon yaniti.",
+      );
+      const decision = await approveExpertReview(
+        expertSession.accessToken,
+        applicationId,
+        "UI demo uzman onayi.",
+      );
+      const packageQueue = await fetchApplicationPackageQueue(secretariatSession.accessToken);
+      const packageQueuedApplication = packageQueue.find((application) => application.applicationId === applicationId);
+
+      if (!packageQueuedApplication) {
+        throw new Error("Paketleme kuyrugunda secili basvuru bulunamadi.");
+      }
+
+      const reviewPackage = await prepareApplicationPackage(
+        secretariatSession.accessToken,
+        applicationId,
+        "UI demo sekretarya paket notu.",
+      );
+      const agendaQueue = await fetchCommitteeAgendaQueue(secretariatSession.accessToken);
+      const agendaQueuedApplication = agendaQueue.find((application) => application.applicationId === applicationId);
+
+      if (!agendaQueuedApplication) {
+        throw new Error("Kurul gundemi kuyrugunda secili basvuru bulunamadi.");
+      }
+
+      const agendaItem = await addApplicationToCommitteeAgenda(
+        secretariatSession.accessToken,
+        applicationId,
+        "UI demo kurul gundemi notu.",
+      );
+
+      startTransition(() => {
+        setExpertQueueCount(queue.length);
+        setExpertAssignmentStatus(200);
+        setExpertAssignmentState(assignment.application.currentStep);
+        setExpertReviewStatus(200);
+        setExpertReviewState(review.application.currentStep);
+        setRevisionResponseStatus(200);
+        setRevisionResponseState(revisionResponse.application.currentStep);
+        setExpertDecisionStatus(200);
+        setExpertDecisionState(decision.application.currentStep);
+        setPackageQueueCount(packageQueue.length);
+        setPackageStatus(200);
+        setPackageState(reviewPackage.application.currentStep);
+        setAgendaQueueCount(agendaQueue.length);
+        setAgendaStatus(200);
+        setAgendaState(agendaItem.application.currentStep);
+      });
+
+      await Promise.all([
+        refreshSessionState(sessionToken),
+        loadApplications(sessionToken, applicationId),
+      ]);
+
+      setBanner({
+        tone: "success",
+        title: "Uzman ve kurul gundemi demo akisi tamamlandi",
+        detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi ve basvuru kurul incelemesine alindi.`,
+      });
+      pushActivity(
+        `Secretariat (${secretariatSession.email}) atama ve paketleme yapti, expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci yanitladi ve basvuru kurul gundemine alindi.`,
+        "success",
+      );
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman ve kurul gundemi demo akisi basarisiz", detail: getErrorMessage(error) });
+      pushActivity("Expert assignment / committee agenda akisi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   function handleLogout() {
     setCurrentProfileId(null);
     setApplicationProbeStatus(null);
     setApplicationProbeState(null);
     setApplicationCreateStatus(null);
     setApplicationCreateState(null);
+    setApplicationSubmitStatus(null);
+    setApplicationSubmitState(null);
+    setExpertQueueCount(null);
+    setExpertAssignmentStatus(null);
+    setExpertAssignmentState(null);
+    setExpertReviewStatus(null);
+    setExpertReviewState(null);
+    setRevisionResponseStatus(null);
+    setRevisionResponseState(null);
+    setExpertDecisionStatus(null);
+    setExpertDecisionState(null);
+    setPackageQueueCount(null);
+    setPackageStatus(null);
+    setPackageState(null);
+    setAgendaQueueCount(null);
+    setAgendaStatus(null);
+    setAgendaState(null);
     setCurrentApplication(null);
+    setMyApplications([]);
     setApplicationValidation(null);
     setApplicationCommitteeCount(null);
     setSessionToken("");
@@ -950,7 +1351,25 @@ export default function App() {
     setApplicationProbeState(next.applicationProbeState);
     setApplicationCreateStatus(next.applicationCreateStatus);
     setApplicationCreateState(next.applicationCreateState);
+    setApplicationSubmitStatus(next.applicationSubmitStatus);
+    setApplicationSubmitState(next.applicationSubmitState);
+    setExpertQueueCount(next.expertQueueCount);
+    setExpertAssignmentStatus(next.expertAssignmentStatus);
+    setExpertAssignmentState(next.expertAssignmentState);
+    setExpertReviewStatus(next.expertReviewStatus);
+    setExpertReviewState(next.expertReviewState);
+    setRevisionResponseStatus(next.revisionResponseStatus);
+    setRevisionResponseState(next.revisionResponseState);
+    setExpertDecisionStatus(next.expertDecisionStatus);
+    setExpertDecisionState(next.expertDecisionState);
+    setPackageQueueCount(next.packageQueueCount);
+    setPackageStatus(next.packageStatus);
+    setPackageState(next.packageState);
+    setAgendaQueueCount(next.agendaQueueCount);
+    setAgendaStatus(next.agendaStatus);
+    setAgendaState(next.agendaState);
     setCurrentApplication(null);
+    setMyApplications([]);
     setApplicationValidation(null);
     setApplicationCommitteeCount(null);
     window.localStorage.removeItem(STORAGE_KEY);
@@ -1053,7 +1472,7 @@ export default function App() {
             </form>
           </section>
           <section className="panel panel--accent panel--wide">
-            <div className="section-heading"><span>05</span><div><h3>JWT oturum ve basvuru demosu</h3><p>Aktif hesapla login olun, access token alin ve policy gecerse gercek applications akis demo cagrilarini bu panelden calistirin.</p></div></div>
+            <div className="section-heading"><span>05</span><div><h3>JWT oturum ve basvuru demosu</h3><p>Aktif hesapla login olun, access token alin ve policy gecerse gercek applications akis demo cagrilarini; submit sonrasi da secretariat, expert ve kurul gundemi akisini bu panelden calistirin.</p></div></div>
             <div className="form-grid">
               <label className="field"><span>Email veya telefon</span><input value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} /></label>
               <label className="field"><span>Sifre</span><input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
@@ -1061,8 +1480,10 @@ export default function App() {
             <div className="actions actions--cluster">
               <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={() => void handleLogin()}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button>
               <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={() => void handleFetchSession()}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
+              <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={() => void handleFetchApplications()}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button>
               <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={() => void handleProbeApplicationAccess()}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button>
               <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "create-application"} onClick={() => void handleCreateApplicationRoute()}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button>
+              <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={() => void handleRunExpertWorkflow()}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button>
               <button type="button" className="button button--ghost" disabled={!hasSession} onClick={handleLogout}>Oturumu temizle</button>
             </div>
             <div className="session-stack">
@@ -1082,7 +1503,16 @@ export default function App() {
                     <div><span>Basvuru erisimi</span><strong>{formatApplicationAccess(currentUser.applicationAccess)}</strong></div>
                     <div><span>Esik</span><strong>{currentUser.applicationAccess.minimumProfileCompletionPercent === null ? "Tanimli degil" : `%${currentUser.applicationAccess.minimumProfileCompletionPercent}`}</strong></div>
                     <div><span>Probe</span><strong>{formatProbeStatus(applicationProbeStatus, applicationProbeState)}</strong></div>
-                    <div><span>Route</span><strong>{formatApplicationRouteStatus(applicationCreateStatus, applicationCreateState)}</strong></div>
+                    <div><span>Create</span><strong>{formatApplicationRouteStatus(applicationCreateStatus, applicationCreateState)}</strong></div>
+                    <div><span>Submit</span><strong>{formatApplicationSubmitStatus(applicationSubmitStatus, applicationSubmitState)}</strong></div>
+                    <div><span>Queue</span><strong>{expertQueueCount ?? "Calismadi"}</strong></div>
+                    <div><span>Assign</span><strong>{formatExpertWorkflowStatus(expertAssignmentStatus, expertAssignmentState)}</strong></div>
+                    <div><span>Review</span><strong>{formatExpertWorkflowStatus(expertReviewStatus, expertReviewState)}</strong></div>
+                    <div><span>Revision response</span><strong>{formatExpertWorkflowStatus(revisionResponseStatus, revisionResponseState)}</strong></div>
+                    <div><span>Decision</span><strong>{formatExpertWorkflowStatus(expertDecisionStatus, expertDecisionState)}</strong></div>
+                    <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
+                    <div><span>Agenda queue</span><strong>{agendaQueueCount ?? "Calismadi"}</strong></div>
+                    <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
                   </div>
                 ) : (
                   <p>Login sonrasinda bu panelden korumali kullanici ozeti gorunur.</p>
@@ -1096,12 +1526,35 @@ export default function App() {
                     <div><span>Durum</span><strong>{currentApplication.status}</strong></div>
                     <div><span>Adim</span><strong>{formatApplicationStep(currentApplication.currentStep)}</strong></div>
                     <div><span>Entry mode</span><strong>{currentApplication.entryMode ?? "Yok"}</strong></div>
+                    <div><span>Submitted at</span><strong>{currentApplication.submittedAt ? formatDate(currentApplication.submittedAt) : "Henuz gonderilmedi"}</strong></div>
                     <div><span>Komiteler</span><strong>{applicationCommitteeCount ?? 0}</strong></div>
                     <div><span>Validation</span><strong>{applicationValidation ? (applicationValidation.isValid ? "Passed" : "Blocked") : "Bekliyor"}</strong></div>
                     <div><span>Checklist</span><strong>{applicationValidation?.items.length ?? 0}</strong></div>
+                    <div><span>Expert assign</span><strong>{formatExpertWorkflowStatus(expertAssignmentStatus, expertAssignmentState)}</strong></div>
+                    <div><span>Expert review</span><strong>{formatExpertWorkflowStatus(expertReviewStatus, expertReviewState)}</strong></div>
+                    <div><span>Revision response</span><strong>{formatExpertWorkflowStatus(revisionResponseStatus, revisionResponseState)}</strong></div>
+                    <div><span>Expert decision</span><strong>{formatExpertWorkflowStatus(expertDecisionStatus, expertDecisionState)}</strong></div>
+                    <div><span>Package queue</span><strong>{packageQueueCount ?? "Calismadi"}</strong></div>
+                    <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
+                    <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
                   </div>
                 ) : (
-                  <p>Policy gectikten sonra demo akisi create, intake, committee, form, document ve validate adimlarini arka arkaya calistirir.</p>
+                  <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yaniti, uzman onayi, paketleme ve kurul gundemine alma adimlarini calistirir.</p>
+                )}
+              </div>
+              <div className="message-preview">
+                <div className="message-preview__header"><span>Basvurularim</span><strong>{myApplications.length}</strong></div>
+                {myApplications.length > 0 ? (
+                  <div className="meta-list">
+                    {myApplications.slice(0, 4).map((application) => (
+                      <div key={application.applicationId}>
+                        <span>{application.title ?? application.applicationId.slice(0, 8)}</span>
+                        <strong>{`${application.status} / ${formatApplicationStep(application.currentStep)}`}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>Login sonrasi bu panel kullanicinin draft veya submit edilmis basvurularini listeler.</p>
                 )}
               </div>
             </div>

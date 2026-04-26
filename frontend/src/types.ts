@@ -159,6 +159,8 @@ export type ApplicationCurrentStep =
 
 export type ApplicationEntryMode = "Direct" | "Guided";
 
+export type ApplicationExpertReviewDecisionType = "RevisionRequested" | "Approved";
+
 export interface ApplicationSummaryResponse {
   applicationId: string;
   publicRefNo: string | null;
@@ -168,6 +170,7 @@ export interface ApplicationSummaryResponse {
   committeeId: string | null;
   committeeSelectionSource: string | null;
   routingConfidence: number | null;
+  submittedAt: string | null;
   title: string | null;
   summary: string | null;
 }
@@ -231,6 +234,68 @@ export interface ApplicationValidationResponse {
   currentStep: ApplicationCurrentStep;
   isValid: boolean;
   items: ApplicationChecklistItemResponse[];
+}
+
+export interface ApplicationExpertAssignmentResponse {
+  assignmentId: string;
+  applicationId: string;
+  expertUserId: string;
+  expertDisplayName: string;
+  assignedByUserId: string;
+  assignedByDisplayName: string;
+  active: boolean;
+  assignedAt: string;
+  reviewStartedAt: string | null;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationExpertReviewDecisionResponse {
+  decisionId: string;
+  assignmentId: string;
+  applicationId: string;
+  expertUserId: string;
+  decisionType: ApplicationExpertReviewDecisionType;
+  note: string | null;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationRevisionResponseResponse {
+  revisionResponseId: string;
+  applicationId: string;
+  expertReviewDecisionId: string;
+  submittedByUserId: string;
+  responseNote: string;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationReviewPackageResponse {
+  reviewPackageId: string;
+  applicationId: string;
+  preparedByUserId: string;
+  note: string | null;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationCommitteeAgendaItemResponse {
+  agendaItemId: string;
+  applicationId: string;
+  committeeId: string;
+  reviewPackageId: string;
+  addedByUserId: string;
+  note: string | null;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface DevelopmentRoleAssignmentResponse {
+  userId: string;
+  roleId: string;
+  roleCode: string;
+  active: boolean;
+  assignedAt: string;
 }
 
 export interface MockMessageResponse {

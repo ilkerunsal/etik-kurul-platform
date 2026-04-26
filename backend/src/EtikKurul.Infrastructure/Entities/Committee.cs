@@ -10,4 +10,5 @@ public class Committee
     public ICollection<CommitteeVersion> Versions { get; set; } = [];
     public ICollection<Application> Applications { get; set; } = [];
     public ICollection<RoutingAssessment> SuggestedRoutingAssessments { get; set; } = [];
+    public ICollection<ApplicationCommitteeAgendaItem> AgendaItems { get; set; } = [];
 }

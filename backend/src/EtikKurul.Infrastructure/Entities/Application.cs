@@ -27,4 +27,9 @@ public class Application
     public ICollection<ApplicationForm> Forms { get; set; } = [];
     public ICollection<ApplicationDocument> Documents { get; set; } = [];
     public ICollection<ApplicationChecklist> Checklists { get; set; } = [];
+    public ICollection<ApplicationExpertAssignment> ExpertAssignments { get; set; } = [];
+    public ICollection<ApplicationExpertReviewDecision> ExpertReviewDecisions { get; set; } = [];
+    public ICollection<ApplicationRevisionResponse> RevisionResponses { get; set; } = [];
+    public ICollection<ApplicationReviewPackage> ReviewPackages { get; set; } = [];
+    public ICollection<ApplicationCommitteeAgendaItem> CommitteeAgendaItems { get; set; } = [];
 }

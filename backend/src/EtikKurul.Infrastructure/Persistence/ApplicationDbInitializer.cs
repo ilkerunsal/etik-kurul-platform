@@ -56,16 +56,42 @@ public static class ApplicationDbInitializer
             return;
         }
 
-        if (await TableExistsAsync(dbContext, "applications", cancellationToken))
+        var requiredTables = new[]
+        {
+            "applications",
+            "application_expert_assignments",
+            "application_expert_review_decisions",
+            "application_revision_responses",
+            "application_review_packages",
+            "application_committee_agenda_items",
+        };
+
+        if (await RequiredTablesExistAsync(dbContext, requiredTables, cancellationToken))
         {
             return;
         }
 
         logger.LogWarning(
-            "Existing relational schema is missing the 'applications' table. Recreating the isolated development database.");
+            "Existing relational schema is missing one or more required Etik Kurul tables. Recreating the isolated development database.");
 
         await dbContext.Database.EnsureDeletedAsync(cancellationToken);
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+    }
+
+    private static async Task<bool> RequiredTablesExistAsync(
+        ApplicationDbContext dbContext,
+        IEnumerable<string> tableNames,
+        CancellationToken cancellationToken)
+    {
+        foreach (var tableName in tableNames)
+        {
+            if (!await TableExistsAsync(dbContext, tableName, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static async Task<bool> TableExistsAsync(

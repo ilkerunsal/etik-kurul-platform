@@ -59,6 +59,24 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new CanOpenApplicationRequirement());
     });
+
+    options.AddPolicy(ApplicationPolicies.ManageExpertAssignments, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole("secretariat");
+    });
+
+    options.AddPolicy(ApplicationPolicies.StartExpertReview, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole("ethics_expert");
+    });
+
+    options.AddPolicy(ApplicationPolicies.ManageCommitteeAgenda, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole("secretariat");
+    });
 });
 builder.Services.AddScoped<IAuthorizationHandler, CanOpenApplicationAuthorizationHandler>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();

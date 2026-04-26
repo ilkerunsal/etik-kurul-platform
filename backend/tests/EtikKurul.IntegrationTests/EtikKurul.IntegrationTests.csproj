@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <Target Name="BuildIntegrationDependencies" BeforeTargets="ResolveReferences">
-    <MSBuild Projects="..\..\src\EtikKurul.Api\EtikKurul.Api.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\..\src\EtikKurul.Api\EtikKurul.Api.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="..\..\src\EtikKurul.Infrastructure\EtikKurul.Infrastructure.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="..\..\src\EtikKurul.Modules.Applications\EtikKurul.Modules.Applications.csproj" Targets="Build" Properties="Configuration=$(Configuration)" />
   </Target>

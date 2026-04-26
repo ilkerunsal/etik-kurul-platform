@@ -10,7 +10,7 @@ Bu klasor Etik Kurul uygulamasinin tek kok projesidir. Docker tarafinda yalnizca
 
 ## Calistirma
 
-1. `C:\Users\ilker\Documents\Playground\etik-kurul-platform` klasorune girin.
+1. `C:\Users\ilker\Documents\etik-kurul-platform` klasorune girin.
 2. Gerekirse `.env.example` dosyasini `.env` olarak kopyalayin.
 3. `docker compose up -d --build` komutunu calistirin.
 
@@ -27,4 +27,4 @@ Faz 1 ve application demo akislarini frontend proxy uzerinden dogrulamak icin:
 
 `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-phase1.ps1`
 
-Script sirayla kayit, kimlik dogrulama, mock kod cekme, email aktivasyonu, JWT login, `auth/me`, `auth/application-access`, policy probe, profil olusturma ve guncelleme, ardindan `applications` akisindaki create, committee, form, document ve validation adimlarini calistirir; sonucu JSON olarak basar.
+Script sirayla kayit, kimlik dogrulama, mock kod cekme, email aktivasyonu, JWT login, `auth/me`, `auth/application-access`, policy probe, profil olusturma ve guncelleme, ardindan `applications` akisindaki create, committee, form, document, validation, submit, secretariat uzman atama, expert review start, expert revision request, applicant revision response, expert approval, sekretarya paketleme ve kurul gundemine alma adimlarini calistirir; sonucu JSON olarak basar.

@@ -11,5 +11,6 @@ public sealed record ApplicationSummaryResponse(
     Guid? CommitteeId,
     string? CommitteeSelectionSource,
     decimal? RoutingConfidence,
+    DateTimeOffset? SubmittedAt,
     string? Title,
     string? Summary);

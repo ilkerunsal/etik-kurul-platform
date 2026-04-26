@@ -1,11 +1,17 @@
 import type {
   ApplicationDocumentResponse,
   ApplicationEntryMode,
+  ApplicationExpertAssignmentResponse,
+  ApplicationExpertReviewDecisionResponse,
   ApplicationFormResponse,
+  ApplicationCommitteeAgendaItemResponse,
+  ApplicationRevisionResponseResponse,
+  ApplicationReviewPackageResponse,
   ApplicationSummaryResponse,
   ApplicationValidationResponse,
   ApplicationAccessProbeResponse,
   CommitteeLookupResponse,
+  DevelopmentRoleAssignmentResponse,
   ConfirmContactCodeResponse,
   ContactChannelType,
   CurrentUserResponse,
@@ -231,6 +237,30 @@ export function createApplication(accessToken: string, title: string, summary: s
   );
 }
 
+export function fetchMyApplications(accessToken: string) {
+  return request<ApplicationSummaryResponse[]>(
+    "/applications",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function fetchApplication(accessToken: string, applicationId: string) {
+  return request<ApplicationSummaryResponse>(
+    `/applications/${applicationId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
 export function setApplicationEntryMode(
   accessToken: string,
   applicationId: string,
@@ -350,6 +380,177 @@ export function validateApplication(accessToken: string, applicationId: string) 
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({}),
+    },
+  );
+}
+
+export function submitApplication(accessToken: string, applicationId: string) {
+  return request<ApplicationSummaryResponse>(
+    `/applications/${applicationId}/submit`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export function assignDevelopmentRole(userId: string, roleCode: string) {
+  return request<DevelopmentRoleAssignmentResponse>("/dev/roles/assign", {
+    method: "POST",
+    body: JSON.stringify({ userId, roleCode }),
+  });
+}
+
+export function fetchExpertAssignmentQueue(accessToken: string) {
+  return request<ApplicationSummaryResponse[]>(
+    "/applications/expert-assignment/queue",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function assignApplicationExpert(accessToken: string, applicationId: string, expertUserId: string) {
+  return request<ApplicationExpertAssignmentResponse>(
+    `/applications/${applicationId}/expert-assignment`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        expertUserId,
+      }),
+    },
+  );
+}
+
+export function fetchMyExpertAssignments(accessToken: string) {
+  return request<ApplicationExpertAssignmentResponse[]>(
+    "/applications/expert-review/me",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function startExpertReview(accessToken: string, applicationId: string) {
+  return request<ApplicationExpertAssignmentResponse>(
+    `/applications/${applicationId}/expert-review/start`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export function requestExpertRevision(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationExpertReviewDecisionResponse>(
+    `/applications/${applicationId}/expert-review/request-revision`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function approveExpertReview(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationExpertReviewDecisionResponse>(
+    `/applications/${applicationId}/expert-review/approve`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function submitApplicationRevisionResponse(accessToken: string, applicationId: string, responseNote: string) {
+  return request<ApplicationRevisionResponseResponse>(
+    `/applications/${applicationId}/revision-response`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        responseNote,
+      }),
+    },
+  );
+}
+
+export function fetchApplicationPackageQueue(accessToken: string) {
+  return request<ApplicationSummaryResponse[]>(
+    "/applications/secretariat/package-queue",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function prepareApplicationPackage(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationReviewPackageResponse>(
+    `/applications/${applicationId}/secretariat/package`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function fetchCommitteeAgendaQueue(accessToken: string) {
+  return request<ApplicationSummaryResponse[]>(
+    "/applications/committee-agenda/queue",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function addApplicationToCommitteeAgenda(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationCommitteeAgendaItemResponse>(
+    `/applications/${applicationId}/committee-agenda`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
     },
   );
 }

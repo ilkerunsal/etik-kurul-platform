@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using EtikKurul.Api.Contracts.Applications;
 using EtikKurul.Api.Contracts.Auth;
+using EtikKurul.Api.Contracts.Development;
 using EtikKurul.Api.Contracts.Profile;
 using EtikKurul.Infrastructure.Entities;
 using EtikKurul.Infrastructure.Enums;
@@ -464,6 +465,27 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.Equal(ApplicationCurrentStep.ValidationPassed, validatePayload.CurrentStep);
         Assert.Contains(validatePayload.Items, x => x.ItemCode == "profile_ready" && x.Status == ApplicationChecklistStatus.Passed);
         Assert.Contains(validatePayload.Items, x => x.ItemCode == "required_documents_status" && x.Status == ApplicationChecklistStatus.Passed);
+
+        var submitResponse = await client.PostAsync($"/applications/{createApplicationPayload.ApplicationId}/submit", content: null);
+        submitResponse.EnsureSuccessStatusCode();
+        var submitPayload = await ReadJsonAsync<ApplicationSummaryResponse>(submitResponse);
+        Assert.NotNull(submitPayload);
+        Assert.Equal(ApplicationStatus.Submitted, submitPayload!.Status);
+        Assert.Equal(ApplicationCurrentStep.WaitingExpertAssignment, submitPayload.CurrentStep);
+        Assert.NotNull(submitPayload.SubmittedAt);
+
+        var detailResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}");
+        detailResponse.EnsureSuccessStatusCode();
+        var detailPayload = await ReadJsonAsync<ApplicationSummaryResponse>(detailResponse);
+        Assert.NotNull(detailPayload);
+        Assert.Equal(ApplicationStatus.Submitted, detailPayload!.Status);
+        Assert.Equal(ApplicationCurrentStep.WaitingExpertAssignment, detailPayload.CurrentStep);
+
+        var listResponse = await client.GetAsync("/applications");
+        listResponse.EnsureSuccessStatusCode();
+        var listPayload = await ReadJsonAsync<List<ApplicationSummaryResponse>>(listResponse);
+        Assert.NotNull(listPayload);
+        Assert.Contains(listPayload!, x => x.ApplicationId == createApplicationPayload.ApplicationId && x.Status == ApplicationStatus.Submitted);
     }
 
     [Fact]
@@ -538,6 +560,316 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.Contains(validatePayload.Items, x => x.ItemCode == "intake_completed" && x.Status == ApplicationChecklistStatus.Blocked);
         Assert.Contains(validatePayload.Items, x => x.ItemCode == "committee_selected" && x.Status == ApplicationChecklistStatus.Blocked);
         Assert.Contains(validatePayload.Items, x => x.ItemCode == "forms_present" && x.Status == ApplicationChecklistStatus.Blocked);
+
+        var submitResponse = await client.PostAsync($"/applications/{createApplicationPayload.ApplicationId}/submit", content: null);
+        Assert.Equal(HttpStatusCode.BadRequest, submitResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpertAssignmentWorkflow_AssignsSubmittedApplication_AndMovesToCommitteeReview()
+    {
+        using var configuredFactory = new TestWebApplicationFactory(minimumProfileCompletionPercent: 100);
+        configuredFactory.IdentityProvider.ShouldSucceed = true;
+
+        var client = configuredFactory.CreateClient();
+        var applicantRegisterRequest = BuildRegisterRequest("30303030303");
+        var applicantRegisterResponse = await PostJsonAsync(client, "/auth/register", applicantRegisterRequest);
+        var applicantRegisterPayload = await ReadJsonAsync<RegisterResponse>(applicantRegisterResponse);
+
+        await PostJsonAsync(client, "/auth/verify-identity", new VerifyIdentityRequest { UserId = applicantRegisterPayload!.UserId });
+        var applicantCode = configuredFactory.EmailProvider.ExtractLatestCode();
+
+        await PostJsonAsync(
+            client,
+            "/auth/confirm-code",
+            new ConfirmContactCodeRequest
+            {
+                UserId = applicantRegisterPayload.UserId,
+                ChannelType = ContactChannelType.Email,
+                Code = applicantCode,
+            });
+
+        var applicantLoginResponse = await PostJsonAsync(
+            client,
+            "/auth/login",
+            new LoginRequest
+            {
+                EmailOrPhone = applicantRegisterRequest.Email,
+                Password = "Password1",
+            });
+
+        var applicantLoginPayload = await ReadJsonAsync<LoginResponse>(applicantLoginResponse);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicantLoginPayload!.AccessToken);
+
+        await PostJsonAsync(
+            client,
+            "/profile",
+            new CreateProfileRequest
+            {
+                AcademicTitle = "Prof.",
+                DegreeLevel = "PhD",
+                InstitutionName = "Hacettepe",
+                FacultyName = "Tip",
+                DepartmentName = "Bilisim",
+                PositionTitle = "Ogretim Uyesi",
+                Biography = "Updated bio",
+                SpecializationSummary = "Updated summary",
+                HasESignature = true,
+                KepAddress = "kep@example.com",
+                CvDocumentId = Guid.NewGuid(),
+            });
+
+        var createApplicationResponse = await PostJsonAsync(
+            client,
+            "/applications",
+            new CreateApplicationRequest("Uzman Kuyruk Testi", "Submit sonrasi expert assignment akisi"));
+        createApplicationResponse.EnsureSuccessStatusCode();
+        var createApplicationPayload = await ReadJsonAsync<ApplicationSummaryResponse>(createApplicationResponse);
+
+        var committeesResponse = await client.GetAsync("/committees");
+        committeesResponse.EnsureSuccessStatusCode();
+        var committeesPayload = await ReadJsonAsync<List<CommitteeLookupResponse>>(committeesResponse);
+        var committee = committeesPayload!.First();
+
+        await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload!.ApplicationId}/entry-mode",
+            new SetApplicationEntryModeRequest(ApplicationEntryMode.Guided));
+
+        await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/intake",
+            new SaveApplicationIntakeRequest(
+                JsonSerializer.SerializeToElement(new
+                {
+                    researchArea = "clinical",
+                    requiresSpecialReview = false,
+                }),
+                committee.CommitteeId,
+                JsonSerializer.SerializeToElement(new[] { committee.CommitteeId }),
+                0.91m,
+                "Expert assignment test intake"));
+
+        await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/committee",
+            new SelectApplicationCommitteeRequest(committee.CommitteeId, "guided"));
+
+        await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/forms/clinical-main",
+            new SaveApplicationFormRequest(
+                1,
+                JsonSerializer.SerializeToElement(new
+                {
+                    studyTitle = "Uzman Kuyruk Testi",
+                    participantCount = 18,
+                }),
+                100));
+
+        await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/documents",
+            new AddApplicationDocumentRequest(
+                "consent_form",
+                "upload",
+                "consent.pdf",
+                "mock://documents/consent.pdf",
+                "application/pdf",
+                1,
+                true));
+
+        var validateResponse = await client.PostAsync($"/applications/{createApplicationPayload.ApplicationId}/validate", content: null);
+        validateResponse.EnsureSuccessStatusCode();
+
+        var submitResponse = await client.PostAsync($"/applications/{createApplicationPayload.ApplicationId}/submit", content: null);
+        submitResponse.EnsureSuccessStatusCode();
+
+        var secretariatRegisterRequest = BuildRegisterRequest("40404040404");
+        var secretariatRegisterResponse = await PostJsonAsync(client, "/auth/register", secretariatRegisterRequest);
+        var secretariatRegisterPayload = await ReadJsonAsync<RegisterResponse>(secretariatRegisterResponse);
+
+        await PostJsonAsync(client, "/auth/verify-identity", new VerifyIdentityRequest { UserId = secretariatRegisterPayload!.UserId });
+        var secretariatCode = configuredFactory.EmailProvider.ExtractLatestCode();
+
+        await PostJsonAsync(
+            client,
+            "/auth/confirm-code",
+            new ConfirmContactCodeRequest
+            {
+                UserId = secretariatRegisterPayload.UserId,
+                ChannelType = ContactChannelType.Email,
+                Code = secretariatCode,
+            });
+
+        var assignSecretariatRoleResponse = await PostJsonAsync(
+            client,
+            "/dev/roles/assign",
+            new AssignDevelopmentRoleRequest(secretariatRegisterPayload.UserId, "secretariat"));
+        assignSecretariatRoleResponse.EnsureSuccessStatusCode();
+
+        var secretariatLoginResponse = await PostJsonAsync(
+            client,
+            "/auth/login",
+            new LoginRequest
+            {
+                EmailOrPhone = secretariatRegisterRequest.Email,
+                Password = "Password1",
+            });
+        var secretariatLoginPayload = await ReadJsonAsync<LoginResponse>(secretariatLoginResponse);
+
+        var expertRegisterRequest = BuildRegisterRequest("50505050505");
+        var expertRegisterResponse = await PostJsonAsync(client, "/auth/register", expertRegisterRequest);
+        var expertRegisterPayload = await ReadJsonAsync<RegisterResponse>(expertRegisterResponse);
+
+        await PostJsonAsync(client, "/auth/verify-identity", new VerifyIdentityRequest { UserId = expertRegisterPayload!.UserId });
+        var expertCode = configuredFactory.EmailProvider.ExtractLatestCode();
+
+        await PostJsonAsync(
+            client,
+            "/auth/confirm-code",
+            new ConfirmContactCodeRequest
+            {
+                UserId = expertRegisterPayload.UserId,
+                ChannelType = ContactChannelType.Email,
+                Code = expertCode,
+            });
+
+        var assignExpertRoleResponse = await PostJsonAsync(
+            client,
+            "/dev/roles/assign",
+            new AssignDevelopmentRoleRequest(expertRegisterPayload.UserId, "ethics_expert"));
+        assignExpertRoleResponse.EnsureSuccessStatusCode();
+
+        var expertLoginResponse = await PostJsonAsync(
+            client,
+            "/auth/login",
+            new LoginRequest
+            {
+                EmailOrPhone = expertRegisterRequest.Email,
+                Password = "Password1",
+            });
+        var expertLoginPayload = await ReadJsonAsync<LoginResponse>(expertLoginResponse);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretariatLoginPayload!.AccessToken);
+
+        var queueResponse = await client.GetAsync("/applications/expert-assignment/queue");
+        queueResponse.EnsureSuccessStatusCode();
+        var queuePayload = await ReadJsonAsync<List<ApplicationSummaryResponse>>(queueResponse);
+        Assert.NotNull(queuePayload);
+        Assert.Contains(queuePayload!, x => x.ApplicationId == createApplicationPayload.ApplicationId);
+
+        var assignExpertResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/expert-assignment",
+            new AssignApplicationExpertRequest(expertRegisterPayload.UserId));
+        assignExpertResponse.EnsureSuccessStatusCode();
+        var assignExpertPayload = await ReadJsonAsync<ApplicationExpertAssignmentResponse>(assignExpertResponse);
+        Assert.NotNull(assignExpertPayload);
+        Assert.Equal(expertRegisterPayload.UserId, assignExpertPayload!.ExpertUserId);
+        Assert.Equal(ApplicationCurrentStep.ExpertAssigned, assignExpertPayload.Application.CurrentStep);
+        Assert.True(assignExpertPayload.Active);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", expertLoginPayload!.AccessToken);
+
+        var assignedToMeResponse = await client.GetAsync("/applications/expert-review/me");
+        assignedToMeResponse.EnsureSuccessStatusCode();
+        var assignedToMePayload = await ReadJsonAsync<List<ApplicationExpertAssignmentResponse>>(assignedToMeResponse);
+        Assert.NotNull(assignedToMePayload);
+        Assert.Contains(assignedToMePayload!, x => x.ApplicationId == createApplicationPayload.ApplicationId);
+
+        var startReviewResponse = await client.PostAsync(
+            $"/applications/{createApplicationPayload.ApplicationId}/expert-review/start",
+            content: null);
+        startReviewResponse.EnsureSuccessStatusCode();
+        var startReviewPayload = await ReadJsonAsync<ApplicationExpertAssignmentResponse>(startReviewResponse);
+        Assert.NotNull(startReviewPayload);
+        Assert.Equal(ApplicationCurrentStep.UnderExpertReview, startReviewPayload!.Application.CurrentStep);
+        Assert.Equal(ApplicationStatus.UnderReview, startReviewPayload.Application.Status);
+        Assert.NotNull(startReviewPayload.ReviewStartedAt);
+
+        var revisionRequestResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/expert-review/request-revision",
+            new SubmitExpertReviewDecisionRequest("Expert review integration revision request."));
+        revisionRequestResponse.EnsureSuccessStatusCode();
+        var revisionRequestPayload = await ReadJsonAsync<ApplicationExpertReviewDecisionResponse>(revisionRequestResponse);
+        Assert.NotNull(revisionRequestPayload);
+        Assert.Equal(ApplicationExpertReviewDecisionType.RevisionRequested, revisionRequestPayload!.DecisionType);
+        Assert.Equal(ApplicationStatus.AdditionalDocumentsRequested, revisionRequestPayload.Application.Status);
+        Assert.Equal(ApplicationCurrentStep.ExpertRevisionRequested, revisionRequestPayload.Application.CurrentStep);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicantLoginPayload.AccessToken);
+
+        var revisionResponseResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/revision-response",
+            new SubmitApplicationRevisionResponseRequest("Applicant answered the expert revision request."));
+        revisionResponseResponse.EnsureSuccessStatusCode();
+        var revisionResponsePayload = await ReadJsonAsync<ApplicationRevisionResponseResponse>(revisionResponseResponse);
+        Assert.NotNull(revisionResponsePayload);
+        Assert.Equal(revisionRequestPayload.DecisionId, revisionResponsePayload!.ExpertReviewDecisionId);
+        Assert.Equal(ApplicationStatus.UnderReview, revisionResponsePayload.Application.Status);
+        Assert.Equal(ApplicationCurrentStep.UnderExpertReview, revisionResponsePayload.Application.CurrentStep);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", expertLoginPayload.AccessToken);
+
+        var expertDecisionResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/expert-review/approve",
+            new SubmitExpertReviewDecisionRequest("Expert review integration approval."));
+        expertDecisionResponse.EnsureSuccessStatusCode();
+        var expertDecisionPayload = await ReadJsonAsync<ApplicationExpertReviewDecisionResponse>(expertDecisionResponse);
+        Assert.NotNull(expertDecisionPayload);
+        Assert.Equal(ApplicationExpertReviewDecisionType.Approved, expertDecisionPayload!.DecisionType);
+        Assert.Equal(ApplicationCurrentStep.ExpertApproved, expertDecisionPayload.Application.CurrentStep);
+        Assert.Equal(ApplicationStatus.UnderReview, expertDecisionPayload.Application.Status);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretariatLoginPayload.AccessToken);
+
+        var packageQueueResponse = await client.GetAsync("/applications/secretariat/package-queue");
+        packageQueueResponse.EnsureSuccessStatusCode();
+        var packageQueuePayload = await ReadJsonAsync<List<ApplicationSummaryResponse>>(packageQueueResponse);
+        Assert.NotNull(packageQueuePayload);
+        Assert.Contains(packageQueuePayload!, x => x.ApplicationId == createApplicationPayload.ApplicationId);
+
+        var packageResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/secretariat/package",
+            new PrepareApplicationPackageRequest("Secretariat package integration note."));
+        packageResponse.EnsureSuccessStatusCode();
+        var packagePayload = await ReadJsonAsync<ApplicationReviewPackageResponse>(packageResponse);
+        Assert.NotNull(packagePayload);
+        Assert.Equal(secretariatRegisterPayload.UserId, packagePayload!.PreparedByUserId);
+        Assert.Equal(ApplicationCurrentStep.PackageReady, packagePayload.Application.CurrentStep);
+        Assert.Equal(ApplicationStatus.UnderReview, packagePayload.Application.Status);
+
+        var agendaQueueResponse = await client.GetAsync("/applications/committee-agenda/queue");
+        agendaQueueResponse.EnsureSuccessStatusCode();
+        var agendaQueuePayload = await ReadJsonAsync<List<ApplicationSummaryResponse>>(agendaQueueResponse);
+        Assert.NotNull(agendaQueuePayload);
+        Assert.Contains(agendaQueuePayload!, x => x.ApplicationId == createApplicationPayload.ApplicationId);
+
+        var agendaResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/committee-agenda",
+            new AddApplicationToCommitteeAgendaRequest("Committee agenda integration note."));
+        agendaResponse.EnsureSuccessStatusCode();
+        var agendaPayload = await ReadJsonAsync<ApplicationCommitteeAgendaItemResponse>(agendaResponse);
+        Assert.NotNull(agendaPayload);
+        Assert.Equal(committee.CommitteeId, agendaPayload!.CommitteeId);
+        Assert.Equal(packagePayload.ReviewPackageId, agendaPayload.ReviewPackageId);
+        Assert.Equal(ApplicationCurrentStep.UnderCommitteeReview, agendaPayload.Application.CurrentStep);
+        Assert.Equal(ApplicationStatus.UnderReview, agendaPayload.Application.Status);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicantLoginPayload.AccessToken);
+
+        var detailResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}");
+        detailResponse.EnsureSuccessStatusCode();
+        var detailPayload = await ReadJsonAsync<ApplicationSummaryResponse>(detailResponse);
+        Assert.NotNull(detailPayload);
+        Assert.Equal(ApplicationCurrentStep.UnderCommitteeReview, detailPayload!.CurrentStep);
+        Assert.Equal(ApplicationStatus.UnderReview, detailPayload.Status);
     }
 
     [Fact]

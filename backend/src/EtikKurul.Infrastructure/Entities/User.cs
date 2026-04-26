@@ -25,5 +25,11 @@ public class User
     public ICollection<Application> Applications { get; set; } = [];
     public ICollection<ApplicationParty> ApplicationParties { get; set; } = [];
     public ICollection<ApplicationDocument> CreatedApplicationDocuments { get; set; } = [];
+    public ICollection<ApplicationExpertAssignment> ExpertAssignments { get; set; } = [];
+    public ICollection<ApplicationExpertAssignment> AssignedExpertAssignments { get; set; } = [];
+    public ICollection<ApplicationExpertReviewDecision> ExpertReviewDecisions { get; set; } = [];
+    public ICollection<ApplicationRevisionResponse> ApplicationRevisionResponses { get; set; } = [];
+    public ICollection<ApplicationReviewPackage> PreparedReviewPackages { get; set; } = [];
+    public ICollection<ApplicationCommitteeAgendaItem> AddedCommitteeAgendaItems { get; set; } = [];
     public UserProfile? Profile { get; set; }
 }

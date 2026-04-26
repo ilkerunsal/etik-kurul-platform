@@ -64,6 +64,88 @@ function Get-StatusCode {
     }
 }
 
+function New-DemoRegisterBody {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+        [Parameter(Mandatory = $true)]
+        [string]$Password
+    )
+
+    $seed = (Get-Random -Minimum 1000000000 -Maximum 1999999999).ToString()
+    $stamp = Get-Date -Format "yyyyMMddHHmmssfff"
+    $suffix = $stamp.Substring($stamp.Length - 6)
+
+    return @{
+        firstName = $Label
+        lastName = "Demo"
+        tckn = "7$seed"
+        birthDate = "1990-01-01"
+        email = "$($Label.ToLower())+$suffix@example.com"
+        phone = "90541$($stamp.Substring($stamp.Length - 7))"
+        password = $Password
+    }
+}
+
+function Provision-RoleSession {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseUrl,
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+        [Parameter(Mandatory = $true)]
+        [string]$RoleCode,
+        [Parameter(Mandatory = $true)]
+        [string]$Password
+    )
+
+    $registerBody = New-DemoRegisterBody -Label $Label -Password $Password
+    $register = Invoke-Json -Method Post -Uri "$BaseUrl/auth/register" -Body $registerBody
+    $verify = Invoke-Json -Method Post -Uri "$BaseUrl/auth/verify-identity" -Body @{
+        userId = $register.userId
+    }
+
+    if (-not $verify.success) {
+        throw "$Label identity verification failed."
+    }
+
+    $queryEmail = [uri]::EscapeDataString($registerBody.email)
+    $queryPhone = [uri]::EscapeDataString($registerBody.phone)
+    $messages = Invoke-Json -Method Get -Uri "$BaseUrl/dev/mock-messages?email=$queryEmail&phone=$queryPhone"
+    $emailMessage = $messages | Where-Object { $_.channelType -eq "email" } | Select-Object -First 1
+
+    if (-not $emailMessage.code) {
+        throw "$Label email verification code was not found in the mock inbox."
+    }
+
+    $confirm = Invoke-Json -Method Post -Uri "$BaseUrl/auth/confirm-code" -Body @{
+        userId = $register.userId
+        channelType = "email"
+        code = $emailMessage.code
+    }
+
+    if ($confirm.accountStatus -ne "Active") {
+        throw "$Label account could not be activated."
+    }
+
+    $roleAssignment = Invoke-Json -Method Post -Uri "$BaseUrl/dev/roles/assign" -Body @{
+        userId = $register.userId
+        roleCode = $RoleCode
+    }
+
+    $login = Invoke-Json -Method Post -Uri "$BaseUrl/auth/login" -Body @{
+        emailOrPhone = $registerBody.email
+        password = $Password
+    }
+
+    return [pscustomobject]@{
+        userId = $register.userId
+        email = $registerBody.email
+        accessToken = $login.accessToken
+        roleCode = $roleAssignment.roleCode
+    }
+}
+
 try {
     $register = Invoke-Json -Method Post -Uri "$BaseUrl/auth/register" -Body @{
         firstName = $FirstName
@@ -197,6 +279,58 @@ try {
     }
 
     $validation = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/validate" -BearerToken $login.accessToken -Body @{}
+    $submittedApplication = $null
+    $applications = @()
+    $applicationDetail = $null
+
+    if ($validation.isValid) {
+        $submittedApplication = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/submit" -BearerToken $login.accessToken -Body @{}
+    }
+
+    $secretariatSession = $null
+    $expertSession = $null
+    $expertQueue = @()
+    $assignment = $null
+    $expertAssignments = @()
+    $review = $null
+    $expertRevisionRequest = $null
+    $revisionResponse = $null
+    $expertDecision = $null
+    $packageQueue = @()
+    $reviewPackage = $null
+    $agendaQueue = @()
+    $agendaItem = $null
+
+    if ($submittedApplication) {
+        $secretariatSession = Provision-RoleSession -BaseUrl $BaseUrl -Label "Secretariat" -RoleCode "secretariat" -Password $Password
+        $expertSession = Provision-RoleSession -BaseUrl $BaseUrl -Label "Expert" -RoleCode "ethics_expert" -Password $Password
+        $expertQueue = Invoke-Json -Method Get -Uri "$BaseUrl/applications/expert-assignment/queue" -BearerToken $secretariatSession.accessToken
+        $assignment = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/expert-assignment" -BearerToken $secretariatSession.accessToken -Body @{
+            expertUserId = $expertSession.userId
+        }
+        $expertAssignments = Invoke-Json -Method Get -Uri "$BaseUrl/applications/expert-review/me" -BearerToken $expertSession.accessToken
+        $review = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/expert-review/start" -BearerToken $expertSession.accessToken -Body @{}
+        $expertRevisionRequest = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/expert-review/request-revision" -BearerToken $expertSession.accessToken -Body @{
+            note = "Smoke test revizyon talebi."
+        }
+        $revisionResponse = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/revision-response" -BearerToken $login.accessToken -Body @{
+            responseNote = "Smoke test revizyon yaniti."
+        }
+        $expertDecision = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/expert-review/approve" -BearerToken $expertSession.accessToken -Body @{
+            note = "Smoke test uzman onayi."
+        }
+        $packageQueue = Invoke-Json -Method Get -Uri "$BaseUrl/applications/secretariat/package-queue" -BearerToken $secretariatSession.accessToken
+        $reviewPackage = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/secretariat/package" -BearerToken $secretariatSession.accessToken -Body @{
+            note = "Smoke test sekretarya paket notu."
+        }
+        $agendaQueue = Invoke-Json -Method Get -Uri "$BaseUrl/applications/committee-agenda/queue" -BearerToken $secretariatSession.accessToken
+        $agendaItem = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/committee-agenda" -BearerToken $secretariatSession.accessToken -Body @{
+            note = "Smoke test kurul gundemi notu."
+        }
+    }
+
+    $applicationDetail = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)" -BearerToken $login.accessToken
+    $applications = Invoke-Json -Method Get -Uri "$BaseUrl/applications" -BearerToken $login.accessToken
 
     [pscustomobject]@{
         email = $email
@@ -228,8 +362,8 @@ try {
         probeAfterStatus = $probeAfterProfileStatus
         createApplicationAfterStatus = 201
         applicationId = $createApplication.applicationId
-        applicationStatus = $createApplication.status
-        applicationCurrentStep = $createApplication.currentStep
+        applicationStatus = $applicationDetail.status
+        applicationCurrentStep = $applicationDetail.currentStep
         committeeCount = @($committees).Count
         selectedCommitteeId = $selectedCommittee.committeeId
         entryMode = $entryMode.entryMode
@@ -240,6 +374,24 @@ try {
         validationIsValid = $validation.isValid
         validationCurrentStep = $validation.currentStep
         validationItemCount = @($validation.items).Count
+        submitApplicationStatus = if ($submittedApplication) { $submittedApplication.status } else { $null }
+        submitApplicationCurrentStep = if ($submittedApplication) { $submittedApplication.currentStep } else { $null }
+        expertQueueCount = @($expertQueue).Count
+        expertAssignedUserId = if ($assignment) { $assignment.expertUserId } else { $null }
+        expertAssignmentStep = if ($assignment) { $assignment.application.currentStep } else { $null }
+        expertReviewWorkloadCount = @($expertAssignments).Count
+        expertReviewStep = if ($review) { $review.application.currentStep } else { $null }
+        expertRevisionDecisionType = if ($expertRevisionRequest) { $expertRevisionRequest.decisionType } else { $null }
+        expertRevisionDecisionStep = if ($expertRevisionRequest) { $expertRevisionRequest.application.currentStep } else { $null }
+        revisionResponseStep = if ($revisionResponse) { $revisionResponse.application.currentStep } else { $null }
+        expertDecisionType = if ($expertDecision) { $expertDecision.decisionType } else { $null }
+        expertDecisionStep = if ($expertDecision) { $expertDecision.application.currentStep } else { $null }
+        packageQueueCount = @($packageQueue).Count
+        packageStep = if ($reviewPackage) { $reviewPackage.application.currentStep } else { $null }
+        agendaQueueCount = @($agendaQueue).Count
+        agendaStep = if ($agendaItem) { $agendaItem.application.currentStep } else { $null }
+        listedApplicationCount = @($applications).Count
+        listedFirstApplicationId = if (@($applications).Count -gt 0) { @($applications)[0].applicationId } else { $null }
         meProfileAfter = $meAfterProfile.user.profileCompletionPercent
     } | ConvertTo-Json -Depth 5
 }
