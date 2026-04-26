@@ -445,6 +445,71 @@ public class ApplicationService(
             MapSummary(application));
     }
 
+    public async Task<ApplicationCommitteeRevisionResponseResult> SubmitCommitteeRevisionResponseAsync(
+        SubmitCommitteeRevisionResponseCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.ResponseNote))
+        {
+            throw new ValidationAppException("Committee revision response note is required.");
+        }
+
+        var application = await dbContext.Applications
+            .Include(x => x.CommitteeDecisions)
+            .SingleOrDefaultAsync(
+                x => x.Id == command.ApplicationId && x.ApplicantUserId == command.UserId,
+                cancellationToken)
+            ?? throw new NotFoundAppException("Application was not found.");
+
+        if (application.Status != ApplicationStatus.AdditionalDocumentsRequested ||
+            application.CurrentStep != ApplicationCurrentStep.CommitteeRevisionRequested)
+        {
+            throw new ConflictAppException("Committee revision response can only be submitted after a committee revision request.");
+        }
+
+        var latestRevisionDecision = application.CommitteeDecisions
+            .Where(x => x.DecisionType == ApplicationCommitteeDecisionType.RevisionRequested)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault()
+            ?? throw new ConflictAppException("Application does not have a committee revision request to answer.");
+
+        var hasExistingResponse = await dbContext.ApplicationCommitteeRevisionResponses.AnyAsync(
+            x => x.CommitteeDecisionId == latestRevisionDecision.Id && x.SubmittedByUserId == command.UserId,
+            cancellationToken);
+
+        if (hasExistingResponse)
+        {
+            throw new ConflictAppException("This committee revision request has already been answered.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var response = new ApplicationCommitteeRevisionResponse
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = application.Id,
+            CommitteeDecisionId = latestRevisionDecision.Id,
+            SubmittedByUserId = command.UserId,
+            ResponseNote = command.ResponseNote.Trim(),
+            CreatedAt = now,
+        };
+
+        application.Status = ApplicationStatus.UnderReview;
+        application.CurrentStep = ApplicationCurrentStep.UnderCommitteeReview;
+        application.UpdatedAt = now;
+
+        dbContext.ApplicationCommitteeRevisionResponses.Add(response);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new ApplicationCommitteeRevisionResponseResult(
+            response.Id,
+            response.ApplicationId,
+            response.CommitteeDecisionId,
+            response.SubmittedByUserId,
+            response.ResponseNote,
+            response.CreatedAt,
+            MapSummary(application));
+    }
+
     private async Task<Application> LoadOwnedApplicationAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken)
     {
         return await dbContext.Applications

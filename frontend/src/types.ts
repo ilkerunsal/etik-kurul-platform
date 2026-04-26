@@ -161,6 +161,8 @@ export type ApplicationEntryMode = "Direct" | "Guided";
 
 export type ApplicationExpertReviewDecisionType = "RevisionRequested" | "Approved";
 
+export type ApplicationCommitteeDecisionType = "RevisionRequested" | "Approved" | "Rejected";
+
 export interface ApplicationSummaryResponse {
   applicationId: string;
   publicRefNo: string | null;
@@ -286,6 +288,27 @@ export interface ApplicationCommitteeAgendaItemResponse {
   reviewPackageId: string;
   addedByUserId: string;
   note: string | null;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationCommitteeDecisionResponse {
+  decisionId: string;
+  agendaItemId: string;
+  applicationId: string;
+  decidedByUserId: string;
+  decisionType: ApplicationCommitteeDecisionType;
+  note: string | null;
+  createdAt: string;
+  application: ApplicationSummaryResponse;
+}
+
+export interface ApplicationCommitteeRevisionResponseResponse {
+  revisionResponseId: string;
+  applicationId: string;
+  committeeDecisionId: string;
+  submittedByUserId: string;
+  responseNote: string;
   createdAt: string;
   application: ApplicationSummaryResponse;
 }

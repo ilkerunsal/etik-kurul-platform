@@ -94,6 +94,86 @@ public class ApplicationCommitteeWorkflowController(IApplicationCommitteeWorkflo
             MapSummary(result.Application)));
     }
 
+    [HttpPost("{id:guid}/committee-review/request-revision")]
+    [ProducesResponseType<ApplicationCommitteeDecisionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApplicationCommitteeDecisionResponse>> RequestRevision(
+        [FromRoute] Guid id,
+        [FromBody] SubmitCommitteeDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await committeeWorkflowService.RequestRevisionAsync(
+            new SubmitCommitteeDecisionCommand(userId, id, request?.Note),
+            cancellationToken);
+
+        return Ok(MapDecision(result));
+    }
+
+    [HttpPost("{id:guid}/committee-review/approve")]
+    [ProducesResponseType<ApplicationCommitteeDecisionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApplicationCommitteeDecisionResponse>> Approve(
+        [FromRoute] Guid id,
+        [FromBody] SubmitCommitteeDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await committeeWorkflowService.ApproveAsync(
+            new SubmitCommitteeDecisionCommand(userId, id, request?.Note),
+            cancellationToken);
+
+        return Ok(MapDecision(result));
+    }
+
+    [HttpPost("{id:guid}/committee-review/reject")]
+    [ProducesResponseType<ApplicationCommitteeDecisionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApplicationCommitteeDecisionResponse>> Reject(
+        [FromRoute] Guid id,
+        [FromBody] SubmitCommitteeDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await committeeWorkflowService.RejectAsync(
+            new SubmitCommitteeDecisionCommand(userId, id, request?.Note),
+            cancellationToken);
+
+        return Ok(MapDecision(result));
+    }
+
+    private static ApplicationCommitteeDecisionResponse MapDecision(ApplicationCommitteeDecisionResult result)
+        => new(
+            result.DecisionId,
+            result.AgendaItemId,
+            result.ApplicationId,
+            result.DecidedByUserId,
+            result.DecisionType,
+            result.Note,
+            result.CreatedAt,
+            MapSummary(result.Application));
+
     private static ApplicationSummaryResponse MapSummary(ApplicationSummaryResult result)
         => new(
             result.ApplicationId,

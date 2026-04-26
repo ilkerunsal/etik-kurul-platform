@@ -24,6 +24,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ApplicationRevisionResponse> ApplicationRevisionResponses => Set<ApplicationRevisionResponse>();
     public DbSet<ApplicationReviewPackage> ApplicationReviewPackages => Set<ApplicationReviewPackage>();
     public DbSet<ApplicationCommitteeAgendaItem> ApplicationCommitteeAgendaItems => Set<ApplicationCommitteeAgendaItem>();
+    public DbSet<ApplicationCommitteeDecision> ApplicationCommitteeDecisions => Set<ApplicationCommitteeDecision>();
+    public DbSet<ApplicationCommitteeRevisionResponse> ApplicationCommitteeRevisionResponses => Set<ApplicationCommitteeRevisionResponse>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -331,6 +333,39 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             builder.HasOne(x => x.Committee).WithMany(x => x.AgendaItems).HasForeignKey(x => x.CommitteeId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.ReviewPackage).WithMany(x => x.CommitteeAgendaItems).HasForeignKey(x => x.ReviewPackageId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.AddedByUser).WithMany(x => x.AddedCommitteeAgendaItems).HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ApplicationCommitteeDecision>(builder =>
+        {
+            builder.ToTable("application_committee_decisions");
+            builder.HasKey(x => x.Id);
+            builder.Property(x => x.ApplicationId).HasColumnName("application_id").IsRequired();
+            builder.Property(x => x.AgendaItemId).HasColumnName("agenda_item_id").IsRequired();
+            builder.Property(x => x.DecidedByUserId).HasColumnName("decided_by_user_id").IsRequired();
+            builder.Property(x => x.DecisionType).HasColumnName("decision_type").HasConversion<string>().HasMaxLength(64).IsRequired();
+            builder.Property(x => x.Note).HasColumnName("note").HasColumnType("text");
+            builder.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
+            builder.HasIndex(x => new { x.ApplicationId, x.CreatedAt });
+            builder.HasIndex(x => new { x.AgendaItemId, x.CreatedAt });
+            builder.HasOne(x => x.Application).WithMany(x => x.CommitteeDecisions).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(x => x.AgendaItem).WithMany(x => x.CommitteeDecisions).HasForeignKey(x => x.AgendaItemId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(x => x.DecidedByUser).WithMany(x => x.ApplicationCommitteeDecisions).HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ApplicationCommitteeRevisionResponse>(builder =>
+        {
+            builder.ToTable("application_committee_revision_responses");
+            builder.HasKey(x => x.Id);
+            builder.Property(x => x.ApplicationId).HasColumnName("application_id").IsRequired();
+            builder.Property(x => x.CommitteeDecisionId).HasColumnName("committee_decision_id").IsRequired();
+            builder.Property(x => x.SubmittedByUserId).HasColumnName("submitted_by_user_id").IsRequired();
+            builder.Property(x => x.ResponseNote).HasColumnName("response_note").HasColumnType("text").IsRequired();
+            builder.Property(x => x.CreatedAt).HasColumnName("created_at").IsRequired();
+            builder.HasIndex(x => new { x.ApplicationId, x.CreatedAt });
+            builder.HasIndex(x => new { x.CommitteeDecisionId, x.SubmittedByUserId }).IsUnique();
+            builder.HasOne(x => x.Application).WithMany(x => x.CommitteeRevisionResponses).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(x => x.CommitteeDecision).WithMany(x => x.RevisionResponses).HasForeignKey(x => x.CommitteeDecisionId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(x => x.SubmittedByUser).WithMany(x => x.ApplicationCommitteeRevisionResponses).HasForeignKey(x => x.SubmittedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

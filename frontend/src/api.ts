@@ -5,6 +5,8 @@ import type {
   ApplicationExpertReviewDecisionResponse,
   ApplicationFormResponse,
   ApplicationCommitteeAgendaItemResponse,
+  ApplicationCommitteeDecisionResponse,
+  ApplicationCommitteeRevisionResponseResponse,
   ApplicationRevisionResponseResponse,
   ApplicationReviewPackageResponse,
   ApplicationSummaryResponse,
@@ -543,6 +545,66 @@ export function fetchCommitteeAgendaQueue(accessToken: string) {
 export function addApplicationToCommitteeAgenda(accessToken: string, applicationId: string, note: string) {
   return request<ApplicationCommitteeAgendaItemResponse>(
     `/applications/${applicationId}/committee-agenda`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function requestCommitteeRevision(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationCommitteeDecisionResponse>(
+    `/applications/${applicationId}/committee-review/request-revision`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function submitCommitteeRevisionResponse(accessToken: string, applicationId: string, responseNote: string) {
+  return request<ApplicationCommitteeRevisionResponseResponse>(
+    `/applications/${applicationId}/committee-revision-response`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        responseNote,
+      }),
+    },
+  );
+}
+
+export function approveCommitteeReview(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationCommitteeDecisionResponse>(
+    `/applications/${applicationId}/committee-review/approve`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    },
+  );
+}
+
+export function rejectCommitteeReview(accessToken: string, applicationId: string, note: string) {
+  return request<ApplicationCommitteeDecisionResponse>(
+    `/applications/${applicationId}/committee-review/reject`,
     {
       method: "POST",
       headers: {

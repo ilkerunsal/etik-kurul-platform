@@ -300,6 +300,9 @@ try {
     $reviewPackage = $null
     $agendaQueue = @()
     $agendaItem = $null
+    $committeeRevisionRequest = $null
+    $committeeRevisionResponse = $null
+    $committeeDecision = $null
 
     if ($submittedApplication) {
         $secretariatSession = Provision-RoleSession -BaseUrl $BaseUrl -Label "Secretariat" -RoleCode "secretariat" -Password $Password
@@ -326,6 +329,15 @@ try {
         $agendaQueue = Invoke-Json -Method Get -Uri "$BaseUrl/applications/committee-agenda/queue" -BearerToken $secretariatSession.accessToken
         $agendaItem = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/committee-agenda" -BearerToken $secretariatSession.accessToken -Body @{
             note = "Smoke test kurul gundemi notu."
+        }
+        $committeeRevisionRequest = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/committee-review/request-revision" -BearerToken $secretariatSession.accessToken -Body @{
+            note = "Smoke test kurul revizyon talebi."
+        }
+        $committeeRevisionResponse = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/committee-revision-response" -BearerToken $login.accessToken -Body @{
+            responseNote = "Smoke test kurul revizyon yaniti."
+        }
+        $committeeDecision = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/committee-review/approve" -BearerToken $secretariatSession.accessToken -Body @{
+            note = "Smoke test kurul onayi."
         }
     }
 
@@ -390,6 +402,11 @@ try {
         packageStep = if ($reviewPackage) { $reviewPackage.application.currentStep } else { $null }
         agendaQueueCount = @($agendaQueue).Count
         agendaStep = if ($agendaItem) { $agendaItem.application.currentStep } else { $null }
+        committeeRevisionDecisionType = if ($committeeRevisionRequest) { $committeeRevisionRequest.decisionType } else { $null }
+        committeeRevisionDecisionStep = if ($committeeRevisionRequest) { $committeeRevisionRequest.application.currentStep } else { $null }
+        committeeRevisionResponseStep = if ($committeeRevisionResponse) { $committeeRevisionResponse.application.currentStep } else { $null }
+        committeeDecisionType = if ($committeeDecision) { $committeeDecision.decisionType } else { $null }
+        committeeDecisionStep = if ($committeeDecision) { $committeeDecision.application.currentStep } else { $null }
         listedApplicationCount = @($applications).Count
         listedFirstApplicationId = if (@($applications).Count -gt 0) { @($applications)[0].applicationId } else { $null }
         meProfileAfter = $meAfterProfile.user.profileCompletionPercent

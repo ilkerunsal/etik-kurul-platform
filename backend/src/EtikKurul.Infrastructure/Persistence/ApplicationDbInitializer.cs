@@ -64,6 +64,8 @@ public static class ApplicationDbInitializer
             "application_revision_responses",
             "application_review_packages",
             "application_committee_agenda_items",
+            "application_committee_decisions",
+            "application_committee_revision_responses",
         };
 
         if (await RequiredTablesExistAsync(dbContext, requiredTables, cancellationToken))

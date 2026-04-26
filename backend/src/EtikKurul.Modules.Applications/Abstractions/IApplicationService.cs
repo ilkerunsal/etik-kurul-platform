@@ -17,4 +17,5 @@ public interface IApplicationService
     Task<ApplicationValidationResult> ValidateAsync(ValidateApplicationCommand command, CancellationToken cancellationToken);
     Task<ApplicationSummaryResult> SubmitAsync(SubmitApplicationCommand command, CancellationToken cancellationToken);
     Task<ApplicationRevisionResponseResult> SubmitRevisionResponseAsync(SubmitApplicationRevisionResponseCommand command, CancellationToken cancellationToken);
+    Task<ApplicationCommitteeRevisionResponseResult> SubmitCommitteeRevisionResponseAsync(SubmitCommitteeRevisionResponseCommand command, CancellationToken cancellationToken);
 }

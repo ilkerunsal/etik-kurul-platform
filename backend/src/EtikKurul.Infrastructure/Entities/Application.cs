@@ -32,4 +32,6 @@ public class Application
     public ICollection<ApplicationRevisionResponse> RevisionResponses { get; set; } = [];
     public ICollection<ApplicationReviewPackage> ReviewPackages { get; set; } = [];
     public ICollection<ApplicationCommitteeAgendaItem> CommitteeAgendaItems { get; set; } = [];
+    public ICollection<ApplicationCommitteeDecision> CommitteeDecisions { get; set; } = [];
+    public ICollection<ApplicationCommitteeRevisionResponse> CommitteeRevisionResponses { get; set; } = [];
 }

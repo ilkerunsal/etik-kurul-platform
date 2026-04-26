@@ -310,6 +310,36 @@ public class ApplicationsController(IApplicationService applicationService) : Co
             MapSummary(result.Application)));
     }
 
+    [HttpPost("{id:guid}/committee-revision-response")]
+    [ProducesResponseType<ApplicationCommitteeRevisionResponseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApplicationCommitteeRevisionResponseResponse>> SubmitCommitteeRevisionResponse(
+        [FromRoute] Guid id,
+        [FromBody] SubmitCommitteeRevisionResponseRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.SubmitCommitteeRevisionResponseAsync(
+            new SubmitCommitteeRevisionResponseCommand(userId, id, request.ResponseNote),
+            cancellationToken);
+
+        return Ok(new ApplicationCommitteeRevisionResponseResponse(
+            result.RevisionResponseId,
+            result.ApplicationId,
+            result.CommitteeDecisionId,
+            result.SubmittedByUserId,
+            result.ResponseNote,
+            result.CreatedAt,
+            MapSummary(result.Application)));
+    }
+
     private static string GetJsonPayloadOrDefault(JsonElement element, string fallback)
         => element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
             ? fallback

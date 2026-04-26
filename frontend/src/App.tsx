@@ -4,6 +4,7 @@ import {
   addApplicationToCommitteeAgenda,
   assignApplicationExpert,
   assignDevelopmentRole,
+  approveCommitteeReview,
   approveExpertReview,
   confirmCode,
   createApplication,
@@ -25,6 +26,7 @@ import {
   prepareApplicationPackage,
   registerUser,
   requestExpertRevision,
+  requestCommitteeRevision,
   saveApplicationForm,
   saveApplicationIntake,
   sendCode,
@@ -32,6 +34,7 @@ import {
   setApplicationEntryMode,
   startExpertReview,
   submitApplicationRevisionResponse,
+  submitCommitteeRevisionResponse,
   submitApplication,
   updateProfile,
   validateApplication,
@@ -169,6 +172,12 @@ interface SnapshotState {
   agendaQueueCount: number | null;
   agendaStatus: number | null;
   agendaState: string | null;
+  committeeRevisionStatus: number | null;
+  committeeRevisionState: string | null;
+  committeeRevisionResponseStatus: number | null;
+  committeeRevisionResponseState: string | null;
+  committeeDecisionStatus: number | null;
+  committeeDecisionState: string | null;
 }
 
 function createDefaultSnapshot(): SnapshotState {
@@ -212,6 +221,12 @@ function createDefaultSnapshot(): SnapshotState {
     agendaQueueCount: null,
     agendaStatus: null,
     agendaState: null,
+    committeeRevisionStatus: null,
+    committeeRevisionState: null,
+    committeeRevisionResponseStatus: null,
+    committeeRevisionResponseState: null,
+    committeeDecisionStatus: null,
+    committeeDecisionState: null,
   };
 }
 
@@ -275,6 +290,12 @@ function loadSnapshot(): SnapshotState {
       agendaQueueCount: parsed.agendaQueueCount ?? null,
       agendaStatus: parsed.agendaStatus ?? null,
       agendaState: parsed.agendaState ?? null,
+      committeeRevisionStatus: parsed.committeeRevisionStatus ?? null,
+      committeeRevisionState: parsed.committeeRevisionState ?? null,
+      committeeRevisionResponseStatus: parsed.committeeRevisionResponseStatus ?? null,
+      committeeRevisionResponseState: parsed.committeeRevisionResponseState ?? null,
+      committeeDecisionStatus: parsed.committeeDecisionStatus ?? null,
+      committeeDecisionState: parsed.committeeDecisionState ?? null,
     };
   } catch {
     return createDefaultSnapshot();
@@ -529,6 +550,12 @@ export default function App() {
   const [agendaQueueCount, setAgendaQueueCount] = useState<number | null>(snapshot.agendaQueueCount);
   const [agendaStatus, setAgendaStatus] = useState<number | null>(snapshot.agendaStatus);
   const [agendaState, setAgendaState] = useState<string | null>(snapshot.agendaState);
+  const [committeeRevisionStatus, setCommitteeRevisionStatus] = useState<number | null>(snapshot.committeeRevisionStatus);
+  const [committeeRevisionState, setCommitteeRevisionState] = useState<string | null>(snapshot.committeeRevisionState);
+  const [committeeRevisionResponseStatus, setCommitteeRevisionResponseStatus] = useState<number | null>(snapshot.committeeRevisionResponseStatus);
+  const [committeeRevisionResponseState, setCommitteeRevisionResponseState] = useState<string | null>(snapshot.committeeRevisionResponseState);
+  const [committeeDecisionStatus, setCommitteeDecisionStatus] = useState<number | null>(snapshot.committeeDecisionStatus);
+  const [committeeDecisionState, setCommitteeDecisionState] = useState<string | null>(snapshot.committeeDecisionState);
   const [currentApplication, setCurrentApplication] = useState<ApplicationSummaryResponse | null>(null);
   const [myApplications, setMyApplications] = useState<ApplicationSummaryResponse[]>([]);
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
@@ -585,6 +612,12 @@ export default function App() {
       agendaQueueCount,
       agendaStatus,
       agendaState,
+      committeeRevisionStatus,
+      committeeRevisionState,
+      committeeRevisionResponseStatus,
+      committeeRevisionResponseState,
+      committeeDecisionStatus,
+      committeeDecisionState,
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -614,6 +647,12 @@ export default function App() {
     agendaQueueCount,
     agendaState,
     agendaStatus,
+    committeeDecisionState,
+    committeeDecisionStatus,
+    committeeRevisionResponseState,
+    committeeRevisionResponseStatus,
+    committeeRevisionState,
+    committeeRevisionStatus,
     packageQueueCount,
     packageState,
     packageStatus,
@@ -1252,6 +1291,21 @@ export default function App() {
         applicationId,
         "UI demo kurul gundemi notu.",
       );
+      const committeeRevisionRequest = await requestCommitteeRevision(
+        secretariatSession.accessToken,
+        applicationId,
+        "UI demo kurul revizyon talebi.",
+      );
+      const committeeRevisionResponse = await submitCommitteeRevisionResponse(
+        sessionToken,
+        applicationId,
+        "UI demo kurul revizyon yaniti.",
+      );
+      const committeeDecision = await approveCommitteeReview(
+        secretariatSession.accessToken,
+        applicationId,
+        "UI demo kurul onayi.",
+      );
 
       startTransition(() => {
         setExpertQueueCount(queue.length);
@@ -1269,6 +1323,12 @@ export default function App() {
         setAgendaQueueCount(agendaQueue.length);
         setAgendaStatus(200);
         setAgendaState(agendaItem.application.currentStep);
+        setCommitteeRevisionStatus(200);
+        setCommitteeRevisionState(committeeRevisionRequest.application.currentStep);
+        setCommitteeRevisionResponseStatus(200);
+        setCommitteeRevisionResponseState(committeeRevisionResponse.application.currentStep);
+        setCommitteeDecisionStatus(200);
+        setCommitteeDecisionState(committeeDecision.application.currentStep);
       });
 
       await Promise.all([
@@ -1279,10 +1339,10 @@ export default function App() {
       setBanner({
         tone: "success",
         title: "Uzman ve kurul gundemi demo akisi tamamlandi",
-        detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi ve basvuru kurul incelemesine alindi.`,
+        detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi, kurul revizyonu yanitlandi ve karar ${committeeDecision.decisionType} olarak kaydedildi.`,
       });
       pushActivity(
-        `Secretariat (${secretariatSession.email}) atama ve paketleme yapti, expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci yanitladi ve basvuru kurul gundemine alindi.`,
+        `Secretariat (${secretariatSession.email}) atama, paketleme ve kurul kararini isledi; expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci iki revizyonu da yanitladi.`,
         "success",
       );
     } catch (error) {
@@ -1316,6 +1376,12 @@ export default function App() {
     setAgendaQueueCount(null);
     setAgendaStatus(null);
     setAgendaState(null);
+    setCommitteeRevisionStatus(null);
+    setCommitteeRevisionState(null);
+    setCommitteeRevisionResponseStatus(null);
+    setCommitteeRevisionResponseState(null);
+    setCommitteeDecisionStatus(null);
+    setCommitteeDecisionState(null);
     setCurrentApplication(null);
     setMyApplications([]);
     setApplicationValidation(null);
@@ -1368,6 +1434,12 @@ export default function App() {
     setAgendaQueueCount(next.agendaQueueCount);
     setAgendaStatus(next.agendaStatus);
     setAgendaState(next.agendaState);
+    setCommitteeRevisionStatus(next.committeeRevisionStatus);
+    setCommitteeRevisionState(next.committeeRevisionState);
+    setCommitteeRevisionResponseStatus(next.committeeRevisionResponseStatus);
+    setCommitteeRevisionResponseState(next.committeeRevisionResponseState);
+    setCommitteeDecisionStatus(next.committeeDecisionStatus);
+    setCommitteeDecisionState(next.committeeDecisionState);
     setCurrentApplication(null);
     setMyApplications([]);
     setApplicationValidation(null);
@@ -1513,6 +1585,9 @@ export default function App() {
                     <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
                     <div><span>Agenda queue</span><strong>{agendaQueueCount ?? "Calismadi"}</strong></div>
                     <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
+                    <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
+                    <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
+                    <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
                   </div>
                 ) : (
                   <p>Login sonrasinda bu panelden korumali kullanici ozeti gorunur.</p>
@@ -1537,9 +1612,12 @@ export default function App() {
                     <div><span>Package queue</span><strong>{packageQueueCount ?? "Calismadi"}</strong></div>
                     <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
                     <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
+                    <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
+                    <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
+                    <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
                   </div>
                 ) : (
-                  <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yaniti, uzman onayi, paketleme ve kurul gundemine alma adimlarini calistirir.</p>
+                  <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yanitlari, uzman onayi, paketleme, kurul gundemi ve kurul onayini calistirir.</p>
                 )}
               </div>
               <div className="message-preview">

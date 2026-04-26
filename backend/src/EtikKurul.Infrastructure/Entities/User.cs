@@ -31,5 +31,7 @@ public class User
     public ICollection<ApplicationRevisionResponse> ApplicationRevisionResponses { get; set; } = [];
     public ICollection<ApplicationReviewPackage> PreparedReviewPackages { get; set; } = [];
     public ICollection<ApplicationCommitteeAgendaItem> AddedCommitteeAgendaItems { get; set; } = [];
+    public ICollection<ApplicationCommitteeDecision> ApplicationCommitteeDecisions { get; set; } = [];
+    public ICollection<ApplicationCommitteeRevisionResponse> ApplicationCommitteeRevisionResponses { get; set; } = [];
     public UserProfile? Profile { get; set; }
 }

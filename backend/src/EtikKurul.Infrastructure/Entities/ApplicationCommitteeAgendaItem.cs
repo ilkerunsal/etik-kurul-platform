@@ -13,4 +13,5 @@ public class ApplicationCommitteeAgendaItem
     public Committee Committee { get; set; } = null!;
     public ApplicationReviewPackage ReviewPackage { get; set; } = null!;
     public User AddedByUser { get; set; } = null!;
+    public ICollection<ApplicationCommitteeDecision> CommitteeDecisions { get; set; } = [];
 }

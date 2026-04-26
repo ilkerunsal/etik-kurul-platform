@@ -862,14 +862,52 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.Equal(ApplicationCurrentStep.UnderCommitteeReview, agendaPayload.Application.CurrentStep);
         Assert.Equal(ApplicationStatus.UnderReview, agendaPayload.Application.Status);
 
+        var committeeRevisionRequestResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/committee-review/request-revision",
+            new SubmitCommitteeDecisionRequest("Committee integration revision request."));
+        committeeRevisionRequestResponse.EnsureSuccessStatusCode();
+        var committeeRevisionRequestPayload = await ReadJsonAsync<ApplicationCommitteeDecisionResponse>(committeeRevisionRequestResponse);
+        Assert.NotNull(committeeRevisionRequestPayload);
+        Assert.Equal(ApplicationCommitteeDecisionType.RevisionRequested, committeeRevisionRequestPayload!.DecisionType);
+        Assert.Equal(agendaPayload.AgendaItemId, committeeRevisionRequestPayload.AgendaItemId);
+        Assert.Equal(ApplicationStatus.AdditionalDocumentsRequested, committeeRevisionRequestPayload.Application.Status);
+        Assert.Equal(ApplicationCurrentStep.CommitteeRevisionRequested, committeeRevisionRequestPayload.Application.CurrentStep);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicantLoginPayload.AccessToken);
+
+        var committeeRevisionResponseResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/committee-revision-response",
+            new SubmitCommitteeRevisionResponseRequest("Applicant answered the committee revision request."));
+        committeeRevisionResponseResponse.EnsureSuccessStatusCode();
+        var committeeRevisionResponsePayload = await ReadJsonAsync<ApplicationCommitteeRevisionResponseResponse>(committeeRevisionResponseResponse);
+        Assert.NotNull(committeeRevisionResponsePayload);
+        Assert.Equal(committeeRevisionRequestPayload.DecisionId, committeeRevisionResponsePayload!.CommitteeDecisionId);
+        Assert.Equal(ApplicationStatus.UnderReview, committeeRevisionResponsePayload.Application.Status);
+        Assert.Equal(ApplicationCurrentStep.UnderCommitteeReview, committeeRevisionResponsePayload.Application.CurrentStep);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretariatLoginPayload.AccessToken);
+
+        var committeeDecisionResponse = await PostJsonAsync(
+            client,
+            $"/applications/{createApplicationPayload.ApplicationId}/committee-review/approve",
+            new SubmitCommitteeDecisionRequest("Committee integration approval."));
+        committeeDecisionResponse.EnsureSuccessStatusCode();
+        var committeeDecisionPayload = await ReadJsonAsync<ApplicationCommitteeDecisionResponse>(committeeDecisionResponse);
+        Assert.NotNull(committeeDecisionPayload);
+        Assert.Equal(ApplicationCommitteeDecisionType.Approved, committeeDecisionPayload!.DecisionType);
+        Assert.Equal(ApplicationStatus.Approved, committeeDecisionPayload.Application.Status);
+        Assert.Equal(ApplicationCurrentStep.Approved, committeeDecisionPayload.Application.CurrentStep);
+
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicantLoginPayload.AccessToken);
 
         var detailResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}");
         detailResponse.EnsureSuccessStatusCode();
         var detailPayload = await ReadJsonAsync<ApplicationSummaryResponse>(detailResponse);
         Assert.NotNull(detailPayload);
-        Assert.Equal(ApplicationCurrentStep.UnderCommitteeReview, detailPayload!.CurrentStep);
-        Assert.Equal(ApplicationStatus.UnderReview, detailPayload.Status);
+        Assert.Equal(ApplicationCurrentStep.Approved, detailPayload!.CurrentStep);
+        Assert.Equal(ApplicationStatus.Approved, detailPayload.Status);
     }
 
     [Fact]

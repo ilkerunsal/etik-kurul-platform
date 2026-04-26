@@ -151,6 +151,83 @@ public class ApplicationCommitteeWorkflowService(ApplicationDbContext dbContext)
         return await LoadAgendaItemResultAsync(agendaItem.Id, cancellationToken);
     }
 
+    public Task<ApplicationCommitteeDecisionResult> RequestRevisionAsync(
+        SubmitCommitteeDecisionCommand command,
+        CancellationToken cancellationToken)
+        => SubmitDecisionAsync(
+            command,
+            ApplicationCommitteeDecisionType.RevisionRequested,
+            ApplicationStatus.AdditionalDocumentsRequested,
+            ApplicationCurrentStep.CommitteeRevisionRequested,
+            cancellationToken);
+
+    public Task<ApplicationCommitteeDecisionResult> ApproveAsync(
+        SubmitCommitteeDecisionCommand command,
+        CancellationToken cancellationToken)
+        => SubmitDecisionAsync(
+            command,
+            ApplicationCommitteeDecisionType.Approved,
+            ApplicationStatus.Approved,
+            ApplicationCurrentStep.Approved,
+            cancellationToken);
+
+    public Task<ApplicationCommitteeDecisionResult> RejectAsync(
+        SubmitCommitteeDecisionCommand command,
+        CancellationToken cancellationToken)
+        => SubmitDecisionAsync(
+            command,
+            ApplicationCommitteeDecisionType.Rejected,
+            ApplicationStatus.Rejected,
+            ApplicationCurrentStep.Rejected,
+            cancellationToken);
+
+    private async Task<ApplicationCommitteeDecisionResult> SubmitDecisionAsync(
+        SubmitCommitteeDecisionCommand command,
+        ApplicationCommitteeDecisionType decisionType,
+        ApplicationStatus nextStatus,
+        ApplicationCurrentStep nextStep,
+        CancellationToken cancellationToken)
+    {
+        var application = await dbContext.Applications
+            .Include(x => x.CommitteeAgendaItems)
+            .SingleOrDefaultAsync(x => x.Id == command.ApplicationId, cancellationToken)
+            ?? throw new NotFoundAppException("Application was not found.");
+
+        if (application.Status != ApplicationStatus.UnderReview ||
+            application.CurrentStep != ApplicationCurrentStep.UnderCommitteeReview)
+        {
+            throw new ConflictAppException("Committee decisions can only be submitted while the application is under committee review.");
+        }
+
+        var agendaItem = application.CommitteeAgendaItems
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault()
+            ?? throw new ConflictAppException("Application must be on the committee agenda before a committee decision can be submitted.");
+
+        await EnsureSecretariatUserExistsAsync(command.SecretariatUserId, cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var decision = new ApplicationCommitteeDecision
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = application.Id,
+            AgendaItemId = agendaItem.Id,
+            DecidedByUserId = command.SecretariatUserId,
+            DecisionType = decisionType,
+            Note = NormalizeNote(command.Note),
+            CreatedAt = now,
+        };
+
+        application.Status = nextStatus;
+        application.CurrentStep = nextStep;
+        application.UpdatedAt = now;
+
+        dbContext.ApplicationCommitteeDecisions.Add(decision);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return await LoadDecisionResultAsync(decision.Id, cancellationToken);
+    }
+
     private async Task EnsureSecretariatUserExistsAsync(Guid secretariatUserId, CancellationToken cancellationToken)
     {
         var exists = await dbContext.Users.AnyAsync(x => x.Id == secretariatUserId, cancellationToken);
@@ -201,6 +278,36 @@ public class ApplicationCommitteeWorkflowService(ApplicationDbContext dbContext)
                 x.CommitteeId,
                 x.ReviewPackageId,
                 x.AddedByUserId,
+                x.Note,
+                x.CreatedAt,
+                new ApplicationSummaryResult(
+                    x.Application.Id,
+                    x.Application.PublicRefNo,
+                    x.Application.Status,
+                    x.Application.CurrentStep,
+                    x.Application.EntryMode,
+                    x.Application.CommitteeId,
+                    x.Application.CommitteeSelectionSource,
+                    x.Application.RoutingConfidence,
+                    x.Application.SubmittedAt,
+                    x.Application.Title,
+                    x.Application.Summary)))
+            .SingleAsync(cancellationToken);
+    }
+
+    private async Task<ApplicationCommitteeDecisionResult> LoadDecisionResultAsync(
+        Guid decisionId,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.ApplicationCommitteeDecisions
+            .AsNoTracking()
+            .Where(x => x.Id == decisionId)
+            .Select(x => new ApplicationCommitteeDecisionResult(
+                x.Id,
+                x.AgendaItemId,
+                x.ApplicationId,
+                x.DecidedByUserId,
+                x.DecisionType,
                 x.Note,
                 x.CreatedAt,
                 new ApplicationSummaryResult(
