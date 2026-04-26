@@ -7,6 +7,7 @@ Bu klasor Etik Kurul uygulamasinin tek kok projesidir. Docker tarafinda yalnizca
 - `backend`: .NET 10 Web API ve moduller
 - `frontend`: React istemcisi
 - `scripts`: smoke test ve yardimci scriptler
+- `project_docs`: site map, is akislari, rol/yetki, API ve mimari referans dokumanlari
 
 ## Calistirma
 
