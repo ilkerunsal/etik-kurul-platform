@@ -75,6 +75,7 @@ import {
   tokenPreview,
 } from "./app/formatters";
 import { ActivityFeed } from "./components/ActivityFeed";
+import { AuthGateway } from "./components/AuthGateway";
 import { MessagePreview } from "./components/MessagePreview";
 import { StatusBadge } from "./components/StatusBadge";
 
@@ -139,6 +140,7 @@ export default function App() {
   const canVerifyIdentity = !!userId && (accountStatus === "pending_identity_check" || accountStatus === "identity_failed");
   const canManageContacts = !!userId && (accountStatus === "contact_pending" || accountStatus === "active");
   const canCreateProfile = accountStatus === "active" && hasSession;
+  const shouldShowAuthGateway = !hasSession && !userId;
 
   useEffect(() => {
     const payload: SnapshotState = {
@@ -1014,6 +1016,23 @@ export default function App() {
     setApplicationValidation(null);
     setApplicationCommitteeCount(null);
     window.localStorage.removeItem(STORAGE_KEY);
+  }
+
+  if (shouldShowAuthGateway) {
+    return (
+      <AuthGateway
+        banner={banner}
+        busyAction={busyAction}
+        loginIdentifier={loginIdentifier}
+        loginPassword={loginPassword}
+        registerForm={registerForm}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        setLoginIdentifier={setLoginIdentifier}
+        setLoginPassword={setLoginPassword}
+        setRegisterForm={setRegisterForm}
+      />
+    );
   }
 
   return (
