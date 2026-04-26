@@ -812,6 +812,32 @@ export default function App() {
 
   async function handleCreateApplicationRoute() {
     if (!sessionToken) {
+      setBanner({
+        tone: "neutral",
+        title: "Basvuru icin oturum gerekli",
+        detail: "Demo akisi JWT olmadan POST /applications cagrisi yapmaz.",
+      });
+      pushActivity("Basvuru demo akisi oturum olmadigi icin baslatilmadi.", "neutral");
+      return;
+    }
+
+    if (!currentUser) {
+      setBanner({
+        tone: "neutral",
+        title: "Kullanici ozeti gerekli",
+        detail: "Basvuru demo akisi oncesi /auth/me bilgisini yukleyin.",
+      });
+      pushActivity("Basvuru demo akisi kullanici ozeti olmadan baslatilmadi.", "neutral");
+      return;
+    }
+
+    if (!currentUser.applicationAccess.canOpenApplication) {
+      setBanner({
+        tone: "neutral",
+        title: "Basvuru on kosullari tamamlanmadi",
+        detail: `CanOpenApplication izin vermiyor: ${currentUser.applicationAccess.reasonCode}.`,
+      });
+      pushActivity("Basvuru demo akisi policy on kosulu nedeniyle engellendi.", "neutral");
       return;
     }
 

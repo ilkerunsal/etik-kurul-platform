@@ -787,6 +787,97 @@ button {
   transition: width 0.28s ease;
 }
 
+.application-guidance {
+  margin-top: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.completion-card--application {
+  background:
+    linear-gradient(135deg, rgba(188, 97, 48, 0.12), rgba(255, 255, 255, 0.62)),
+    rgba(255, 255, 255, 0.48);
+}
+
+.completion-card--application .eyebrow {
+  color: var(--accent);
+}
+
+.application-stage-grid,
+.application-demo-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.application-stage-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.application-demo-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.application-stage {
+  min-height: 184px;
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 252, 247, 0.66);
+}
+
+.application-stage span {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(31, 23, 16, 0.07);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.application-stage strong {
+  line-height: 1.1;
+}
+
+.application-stage p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.application-stage small {
+  align-self: end;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.application-stage--success {
+  border-color: rgba(18, 99, 78, 0.22);
+  background: rgba(18, 99, 78, 0.08);
+}
+
+.application-stage--success span {
+  background: rgba(18, 99, 78, 0.12);
+  color: var(--success);
+}
+
+.application-stage--error {
+  border-color: rgba(165, 64, 53, 0.24);
+  background: rgba(165, 64, 53, 0.08);
+}
+
+.application-stage--error span {
+  background: rgba(165, 64, 53, 0.12);
+  color: var(--danger);
+}
+
+.message-preview--compact {
+  margin-top: 0;
+}
+
 .session-stack {
   margin-top: 18px;
   display: grid;
@@ -904,6 +995,8 @@ button {
   .channel-grid,
   .identity-summary,
   .inline-form,
+  .application-stage-grid,
+  .application-demo-grid,
   .session-stack,
   .meta-list,
   .auth-proof-grid {

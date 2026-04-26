@@ -1,5 +1,12 @@
 import type { Dispatch, SetStateAction } from "react";
 import {
+  getApplicationReadiness,
+  getApplicationStageCards,
+  getApplicationStageProgress,
+  getApplicationSummaryLabel,
+  getApplicationValidationGuidance,
+} from "../../app/applicationGuidance";
+import {
   formatApplicationAccess,
   formatApplicationRouteStatus,
   formatApplicationStep,
@@ -17,6 +24,7 @@ import type {
   ApplicationValidationResponse,
   SessionUserResponse,
 } from "../../types";
+import { ValidationSummary } from "../ValidationSummary";
 
 interface SessionWorkflowProps {
   agendaQueueCount: number | null;
@@ -148,6 +156,21 @@ export function SessionWorkflow({
   const showApplicationActions = workflowView === "application" || workflowView === "review";
   const showPolicyProbeAction = workflowView === "profile" || workflowView === "application";
   const showApplicationCards = workflowView !== "profile";
+  const showApplicationGuide = workflowView === "application";
+  const applicationReadiness = getApplicationReadiness({ currentUser, hasSession });
+  const applicationStageCards = getApplicationStageCards({
+    applicationCommitteeCount,
+    applicationCreateState,
+    applicationCreateStatus,
+    applicationSubmitState,
+    applicationSubmitStatus,
+    applicationValidation,
+    currentApplication,
+  });
+  const applicationProgress = getApplicationStageProgress(applicationStageCards);
+  const applicationValidationItems = getApplicationValidationGuidance(applicationValidation, applicationSubmitStatus);
+  const applicationValidationPassed = applicationValidation?.isValid || applicationSubmitStatus === 200;
+  const canRunApplicationDemo = applicationReadiness.ready;
 
   return (
     <section className="panel panel--accent panel--wide">
@@ -162,12 +185,82 @@ export function SessionWorkflow({
         <label className="field"><span>Email veya telefon</span><input value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} /></label>
         <label className="field"><span>Sifre</span><input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
       </div>
+      {showApplicationGuide ? (
+        <div className="application-guidance">
+          <div className="completion-card completion-card--application">
+            <div className="completion-card__header">
+              <div>
+                <span className="eyebrow">Basvuru hazirligi</span>
+                <strong>%{applicationReadiness.percent}</strong>
+              </div>
+              <small>
+                {applicationReadiness.ready
+                  ? "Basvuru demo akisi calistirilmaya hazir."
+                  : `${applicationReadiness.completed}/${applicationReadiness.total} on kosul hazir.`}
+              </small>
+            </div>
+            <div className="completion-meter" aria-label={`Basvuru on kosul hazirligi yuzde ${applicationReadiness.percent}`}>
+              <span style={{ width: `${applicationReadiness.percent}%` }} />
+            </div>
+            <ValidationSummary
+              items={applicationReadiness.missing}
+              title="Basvuru on kosullari"
+              tone={applicationReadiness.ready ? "success" : "neutral"}
+              emptyMessage="JWT, aktif hesap, profil esigi ve CanOpenApplication hazir."
+            />
+          </div>
+
+          <div className="application-stage-grid" aria-label="Basvuru demo adimlari">
+            {applicationStageCards.map((card) => (
+              <article className={`application-stage application-stage--${card.tone}`} key={card.number}>
+                <span>{card.number}</span>
+                <strong>{card.title}</strong>
+                <p>{card.description}</p>
+                <small>{card.status}</small>
+              </article>
+            ))}
+          </div>
+
+          <div className="application-demo-grid">
+            <div className="message-preview message-preview--compact">
+              <div className="message-preview__header">
+                <span>Demo payload</span>
+                <strong>{applicationProgress.completed}/{applicationProgress.total}</strong>
+              </div>
+              <div className="completion-meter" aria-label={`Basvuru demo adim ilerlemesi yuzde ${applicationProgress.percent}`}>
+                <span style={{ width: `${applicationProgress.percent}%` }} />
+              </div>
+              <div className="meta-list">
+                <div><span>Taslak</span><strong>Demo Basvurusu</strong></div>
+                <div><span>Entry mode</span><strong>Guided</strong></div>
+                <div><span>Intake</span><strong>clinical / 12 katilimci</strong></div>
+                <div><span>Form</span><strong>clinical-main / %100</strong></div>
+                <div><span>Dokuman</span><strong>consent.pdf</strong></div>
+                <div><span>Submit hedefi</span><strong>WaitingExpertAssignment</strong></div>
+              </div>
+            </div>
+
+            <div className="message-preview message-preview--compact">
+              <div className="message-preview__header">
+                <span>Validation checklist</span>
+                <strong>{applicationValidationPassed ? "Passed" : applicationValidation ? "Blocked" : "Bekliyor"}</strong>
+              </div>
+              <ValidationSummary
+                items={applicationValidationItems}
+                title="Sistem dogrulamasi"
+                tone={applicationValidationPassed ? "success" : applicationValidation ? "error" : "neutral"}
+                emptyMessage="Checklist bos dondu; basvuru sistem dogrulamasindan gecti."
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="actions actions--cluster">
         {showLoginAction ? <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={onLogin}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button> : null}
         <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={onFetchSession}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
         {showApplicationActions ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={onFetchApplications}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button> : null}
         {showPolicyProbeAction ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={onProbeApplicationAccess}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button> : null}
-        {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "create-application"} onClick={onCreateApplicationRoute}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
+        {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!canRunApplicationDemo || busyAction === "create-application"} onClick={onCreateApplicationRoute}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
         {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={onRunExpertWorkflow}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
         <button type="button" className="button button--ghost" disabled={!hasSession} onClick={onLogout}>Oturumu temizle</button>
       </div>
@@ -214,7 +307,7 @@ export function SessionWorkflow({
             {currentApplication ? (
               <div className="meta-list">
                 <div><span>Baslik</span><strong>{currentApplication.title ?? "Adsiz taslak"}</strong></div>
-                <div><span>Durum</span><strong>{currentApplication.status}</strong></div>
+                <div><span>Durum</span><strong>{getApplicationSummaryLabel(currentApplication)}</strong></div>
                 <div><span>Adim</span><strong>{formatApplicationStep(currentApplication.currentStep)}</strong></div>
                 <div><span>Entry mode</span><strong>{currentApplication.entryMode ?? "Yok"}</strong></div>
                 <div><span>Submitted at</span><strong>{currentApplication.submittedAt ? formatDate(currentApplication.submittedAt) : "Henuz gonderilmedi"}</strong></div>
