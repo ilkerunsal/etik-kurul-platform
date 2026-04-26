@@ -79,6 +79,24 @@ import { AuthGateway } from "./components/AuthGateway";
 import { MessagePreview } from "./components/MessagePreview";
 import { StatusBadge } from "./components/StatusBadge";
 
+type WorkflowView = "identity" | "profile" | "application" | "review";
+
+function getInitialWorkflowView(snapshot: SnapshotState): WorkflowView {
+  if (snapshot.sessionToken && snapshot.committeeDecisionState === "Approved") {
+    return "review";
+  }
+
+  if (snapshot.sessionToken && snapshot.applicationCreateStatus === 201) {
+    return "application";
+  }
+
+  if (snapshot.sessionToken || snapshot.accountStatus === "active") {
+    return "profile";
+  }
+
+  return "identity";
+}
+
 export default function App() {
   const snapshot = loadSnapshot();
   const [registerForm, setRegisterForm] = useState(snapshot.registerForm);
@@ -131,6 +149,7 @@ export default function App() {
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
   const [applicationCommitteeCount, setApplicationCommitteeCount] = useState<number | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [workflowView, setWorkflowView] = useState<WorkflowView>(() => getInitialWorkflowView(snapshot));
 
   const deferredActivity = useDeferredValue(activity);
   const latestEmailMessage = findLatestMessage(mockMessages, "email");
@@ -141,6 +160,61 @@ export default function App() {
   const canManageContacts = !!userId && (accountStatus === "contact_pending" || accountStatus === "active");
   const canCreateProfile = accountStatus === "active" && hasSession;
   const shouldShowAuthGateway = !hasSession && !userId;
+  const identityDone = accountStatus === "active" || hasSession;
+  const profileDone = (profileCompletionPercent ?? 0) >= 100;
+  const applicationDone = !!currentApplication || applicationCreateStatus === 201;
+  const reviewDone = currentApplication?.currentStep === "Approved" || committeeDecisionState === "Approved";
+  const workflowSteps = [
+    {
+      id: "identity" as const,
+      number: "01",
+      title: "Kimlik ve iletisim",
+      description: "Kayit, NVI, email ve SMS aktivasyonu.",
+      enabled: !!userId || !!accountStatus,
+      done: identityDone,
+    },
+    {
+      id: "profile" as const,
+      number: "02",
+      title: "Profil ve yetki",
+      description: "JWT oturumu, profil tamamlama ve policy probe.",
+      enabled: identityDone,
+      done: profileDone,
+    },
+    {
+      id: "application" as const,
+      number: "03",
+      title: "Basvuru hazirligi",
+      description: "Taslak, intake, komite, form, dokuman ve submit.",
+      enabled: hasSession && profileDone,
+      done: applicationDone,
+    },
+    {
+      id: "review" as const,
+      number: "04",
+      title: "Inceleme ve kurul",
+      description: "Uzman, sekreterya, gundem ve kurul karari.",
+      enabled: hasSession && applicationDone,
+      done: reviewDone,
+    },
+  ];
+  const activeWorkflowStep = workflowSteps.find((step) => step.id === workflowView) ?? workflowSteps[0];
+  const sessionPanelTitle =
+    workflowView === "profile"
+      ? "Oturum ve profil yetkisi"
+      : workflowView === "application"
+        ? "Basvuru hazirligi"
+        : "Inceleme ve kurul sureci";
+  const sessionPanelDescription =
+    workflowView === "profile"
+      ? "Aktif hesapla login olun, profil bilgisini yukleyin ve CanOpenApplication policy durumunu kontrol edin."
+      : workflowView === "application"
+        ? "Profil esigi gecildikten sonra taslak, intake, komite, form, dokuman, validation ve submit adimlarini calistirin."
+        : "Submit sonrasi uzman, sekretarya, paket, gundem, revizyon ve kurul karari akisini calistirin.";
+  const showSessionPanel = workflowView !== "identity";
+  const showLoginAction = workflowView === "profile" || !hasSession;
+  const showApplicationActions = workflowView === "application" || workflowView === "review";
+  const showPolicyProbeAction = workflowView === "profile" || workflowView === "application";
 
   useEffect(() => {
     const payload: SnapshotState = {
@@ -402,6 +476,7 @@ export default function App() {
       setSessionExpiresAt(null);
       setLoginIdentifier(registerForm.email || registerForm.phone);
       setLoginPassword(registerForm.password);
+      setWorkflowView("identity");
       setBanner({ tone: "success", title: "Kayit olusturuldu", detail: "Siradaki adim NVI dogrulamasini baslatmak." });
       pushActivity("Kayit tamamlandi. Kimlik dogrulamasi bekleniyor.", "success");
     } catch (error) {
@@ -425,6 +500,7 @@ export default function App() {
       setIdentityResponseCode(response.responseCode);
       await refreshMockInbox(true);
       if (response.success) {
+        setWorkflowView("identity");
         setBanner({ tone: "success", title: "Kimlik eslestirildi", detail: "Mock email ve SMS kodlari asagida hazir." });
         pushActivity("NVI dogrulamasi basarili. Iletisim kodlari uretildi.", "success");
       } else {
@@ -482,6 +558,9 @@ export default function App() {
         title: `${channelType === "email" ? "Email" : "SMS"} onaylandi`,
         detail: response.accountStatus === "active" ? "Hesap aktif. Profil ve oturum paneli hazir." : "Diger kanali da isterseniz onaylayabilirsiniz.",
       });
+      if (response.accountStatus === "active") {
+        setWorkflowView("profile");
+      }
       pushActivity(`${channelType === "email" ? "Email" : "SMS"} dogrulama kodu onaylandi.`, "success");
     } catch (error) {
       setBanner({ tone: "error", title: "Kod onayi basarisiz", detail: getErrorMessage(error) });
@@ -509,6 +588,9 @@ export default function App() {
           title: "Profil guncellendi",
           detail: `Tamamlama orani: %${response.profileCompletionPercent}.`,
         });
+        if (response.profileCompletionPercent >= 100) {
+          setWorkflowView("application");
+        }
         pushActivity("Profil formu guncellendi.", "success");
       } else {
         const response = await createProfile(sessionToken, profileForm);
@@ -521,6 +603,9 @@ export default function App() {
           title: "Profil kaydedildi",
           detail: `Tamamlama orani: %${response.profileCompletionPercent}.`,
         });
+        if (response.profileCompletionPercent >= 100) {
+          setWorkflowView("application");
+        }
         pushActivity("Profil formu olusturuldu.", "success");
       }
     } catch (error) {
@@ -541,6 +626,7 @@ export default function App() {
       applyUserSnapshot(response.user);
       setUserId(response.user.userId);
       await loadApplications(response.accessToken, currentApplication?.applicationId ?? null);
+      setWorkflowView(response.user.applicationAccess.canOpenApplication ? "application" : "profile");
       setBanner({ tone: "success", title: "Oturum acildi", detail: "JWT token olusturuldu. Artik /auth/me sorgusu yapabilirsiniz." });
       pushActivity("JWT tabanli oturum baslatildi.", "success");
     } catch (error) {
@@ -717,6 +803,7 @@ export default function App() {
       setApplicationCreateState(createdApplication.currentStep);
       setApplicationSubmitStatus(validationResponse.isValid ? 200 : 400);
       setApplicationSubmitState(finalApplication.currentStep);
+      setWorkflowView(validationResponse.isValid ? "review" : "application");
       setBanner({
         tone: "success",
         title: "Basvuru akisi tamamlandi",
@@ -912,6 +999,7 @@ export default function App() {
         title: "Uzman ve kurul gundemi demo akisi tamamlandi",
         detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi, kurul revizyonu yanitlandi ve karar ${committeeDecision.decisionType} olarak kaydedildi.`,
       });
+      setWorkflowView("review");
       pushActivity(
         `Secretariat (${secretariatSession.email}) atama, paketleme ve kurul kararini isledi; expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci iki revizyonu da yanitladi.`,
         "success",
@@ -960,6 +1048,7 @@ export default function App() {
     setSessionToken("");
     setSessionExpiresAt(null);
     setCurrentUser(null);
+    setWorkflowView(userId ? "profile" : "identity");
     setBanner({ tone: "neutral", title: "Oturum kapatildi", detail: "Yerel token bellegi temizlendi." });
     pushActivity("JWT oturumu temizlendi.", "neutral");
   }
@@ -1015,6 +1104,7 @@ export default function App() {
     setMyApplications([]);
     setApplicationValidation(null);
     setApplicationCommitteeCount(null);
+    setWorkflowView("identity");
     window.localStorage.removeItem(STORAGE_KEY);
   }
 
@@ -1077,8 +1167,33 @@ export default function App() {
           </button>
         </div>
         {banner ? <section className={`banner banner--${banner.tone}`}><strong>{banner.title}</strong><p>{banner.detail}</p></section> : null}
+        <section className="workflow-overview" aria-label="Basvuru akis adimlari">
+          <div>
+            <span className="eyebrow">Aktif akis</span>
+            <h2>{activeWorkflowStep.title}</h2>
+            <p>{activeWorkflowStep.description}</p>
+          </div>
+          <nav className="workflow-steps" aria-label="Basvuru akis adimlari">
+            {workflowSteps.map((step) => (
+              <button
+                key={step.id}
+                type="button"
+                className={`workflow-step${workflowView === step.id ? " workflow-step--active" : ""}${step.done ? " workflow-step--done" : ""}`}
+                disabled={!step.enabled}
+                onClick={() => setWorkflowView(step.id)}
+                aria-current={workflowView === step.id ? "step" : undefined}
+              >
+                <span>{step.number}</span>
+                <strong>{step.title}</strong>
+                <small>{step.done ? "Tamamlandi" : step.enabled ? "Devam" : "Kilitli"}</small>
+              </button>
+            ))}
+          </nav>
+        </section>
         <div className="panel-grid">
-          <section className="panel panel--form">
+          {workflowView === "identity" ? (
+            <>
+              <section className="panel panel--form">
             <div className="section-heading"><span>01</span><div><h3>Kayit formu</h3><p>Kullanici ve sifre bilgilerini toplayip hesabin ilk kaydini olusturur.</p></div></div>
             <form className="form-grid" onSubmit={handleRegister}>
               <label className="field"><span>Ad</span><input required value={registerForm.firstName} onChange={(event) => setRegisterForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
@@ -1114,7 +1229,10 @@ export default function App() {
               </div>
             </div>
           </section>
-          <section className="panel panel--form panel--wide">
+            </>
+          ) : null}
+          {workflowView === "profile" ? (
+            <section className="panel panel--form panel--wide">
             <div className="section-heading"><span>04</span><div><h3>Profil olusturma</h3><p>E-imza ve KEP dahil Faz 1 profil alanlarini doldurur. Aktif JWT oturumu varsa mevcut profil otomatik yuklenir ve ayni formdan guncellenebilir.</p></div></div>
             <form className="form-grid" onSubmit={handleCreateProfile}>
               <label className="field"><span>Akademik unvan</span><input value={profileForm.academicTitle} onChange={(event) => setProfileForm((current) => ({ ...current, academicTitle: event.target.value }))} disabled={!canCreateProfile} /></label>
@@ -1131,19 +1249,21 @@ export default function App() {
               <div className="actions field--full"><button type="submit" className="button" disabled={!canCreateProfile || busyAction === "create-profile" || busyAction === "update-profile"}>{busyAction === "create-profile" || busyAction === "update-profile" ? "Kaydediliyor" : hasExistingProfile ? "Profili guncelle" : "Profili olustur"}</button><small>{!hasSession ? "Profil kaydi icin once login olun." : hasExistingProfile ? `Mevcut profil yuklendi. Guncel oran: %${profileCompletionPercent ?? 0}` : profileCompletionPercent === null ? "Profil orani backend cevabindan doner." : `Guncel tamamlanma orani: %${profileCompletionPercent}`}</small></div>
             </form>
           </section>
-          <section className="panel panel--accent panel--wide">
-            <div className="section-heading"><span>05</span><div><h3>JWT oturum ve basvuru demosu</h3><p>Aktif hesapla login olun, access token alin ve policy gecerse gercek applications akis demo cagrilarini; submit sonrasi da secretariat, expert ve kurul gundemi akisini bu panelden calistirin.</p></div></div>
+          ) : null}
+          {showSessionPanel ? (
+            <section className="panel panel--accent panel--wide">
+            <div className="section-heading"><span>{workflowView === "profile" ? "05" : workflowView === "application" ? "03" : "04"}</span><div><h3>{sessionPanelTitle}</h3><p>{sessionPanelDescription}</p></div></div>
             <div className="form-grid">
               <label className="field"><span>Email veya telefon</span><input value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} /></label>
               <label className="field"><span>Sifre</span><input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
             </div>
             <div className="actions actions--cluster">
-              <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={() => void handleLogin()}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button>
+              {showLoginAction ? <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={() => void handleLogin()}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button> : null}
               <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={() => void handleFetchSession()}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
-              <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={() => void handleFetchApplications()}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button>
-              <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={() => void handleProbeApplicationAccess()}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button>
-              <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "create-application"} onClick={() => void handleCreateApplicationRoute()}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button>
-              <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={() => void handleRunExpertWorkflow()}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button>
+              {showApplicationActions ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={() => void handleFetchApplications()}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button> : null}
+              {showPolicyProbeAction ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={() => void handleProbeApplicationAccess()}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button> : null}
+              {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "create-application"} onClick={() => void handleCreateApplicationRoute()}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
+              {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={() => void handleRunExpertWorkflow()}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
               <button type="button" className="button button--ghost" disabled={!hasSession} onClick={handleLogout}>Oturumu temizle</button>
             </div>
             <div className="session-stack">
@@ -1181,7 +1301,8 @@ export default function App() {
                   <p>Login sonrasinda bu panelden korumali kullanici ozeti gorunur.</p>
                 )}
               </div>
-              <div className="message-preview">
+              {workflowView !== "profile" ? (
+                <div className="message-preview">
                 <div className="message-preview__header"><span>Basvuru demosu</span><strong>{currentApplication ? currentApplication.applicationId.slice(0, 8) : "Calismadi"}</strong></div>
                 {currentApplication ? (
                   <div className="meta-list">
@@ -1208,7 +1329,9 @@ export default function App() {
                   <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yanitlari, uzman onayi, paketleme, kurul gundemi ve kurul onayini calistirir.</p>
                 )}
               </div>
-              <div className="message-preview">
+              ) : null}
+              {workflowView !== "profile" ? (
+                <div className="message-preview">
                 <div className="message-preview__header"><span>Basvurularim</span><strong>{myApplications.length}</strong></div>
                 {myApplications.length > 0 ? (
                   <div className="meta-list">
@@ -1223,8 +1346,10 @@ export default function App() {
                   <p>Login sonrasi bu panel kullanicinin draft veya submit edilmis basvurularini listeler.</p>
                 )}
               </div>
+              ) : null}
             </div>
           </section>
+          ) : null}
         </div>
       </main>
     </div>
