@@ -47,27 +47,30 @@ Not: Mevcut implementasyonda email veya SMS kanallarindan birinin dogrulanmasi h
 
 ```mermaid
 flowchart TD
-    A["Auth Gateway / Login"] --> B["POST /auth/login"]
+    A["/login"] --> B["POST /auth/login"]
     B --> C{"Credentials dogru mu?"}
     C -->|Hayir| D["Login basarisiz banner"]
     C -->|Evet| E["JWT access token"]
     E --> F["GET /auth/me"]
     E --> G["GET /profile/me"]
     E --> H["GET /applications"]
-    F --> I["Authenticated workspace"]
+    F --> I["Authenticated workspace route"]
     G --> I
     H --> I
+    I --> J{Profil esigi uygun mu?}
+    J -->|Hayir| K["/workspace/profile"]
+    J -->|Evet| L["/workspace/application"]
 ```
 
 ## 3. Profil ve Basvuru Yetki Kapisi
 
 ```mermaid
 flowchart TD
-    A["Active user + JWT"] --> B["POST /profile"]
+    A["/workspace/profile"] --> B["POST /profile"]
     B --> C["profile_completion_percent hesaplanir"]
     C --> D{"Tamamlama %100 mu?"}
     D -->|Hayir| E["CanOpenApplication blocked"]
-    D -->|Evet| F["CanOpenApplication ready"]
+    D -->|Evet| F["/workspace/application"]
     F --> G["POST /applications"]
 ```
 
@@ -89,7 +92,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["CanOpenApplication ready"] --> B["Create application"]
+    A["/workspace/application"] --> B["Create application"]
     B --> C["Set entry mode"]
     C --> D["Save intake"]
     D --> E["Select committee"]
@@ -99,7 +102,7 @@ flowchart TD
     H --> I{"Validation passed?"}
     I -->|Hayir| J["ValidationFailed"]
     I -->|Evet| K["Submit application"]
-    K --> L["WaitingExpertAssignment"]
+    K --> L["/workspace/review"]
 ```
 
 ### Basvuru durum gecisleri
@@ -169,3 +172,14 @@ Bu sira UI'daki `Basvuru demo akisi` ve `Uzman + kurul demo akisi` butonlari ile
 | 9 | Package and agenda | `UnderCommitteeReview` |
 | 10 | Committee revision/response/approval | `Approved` |
 
+## 9. UI Route Gecisleri
+
+| Kaynak | Tetikleyici | Hedef |
+| --- | --- | --- |
+| `/login` | Basarili login, profil eksik | `/workspace/profile` |
+| `/login` | Basarili login, basvuru erisimi hazir | `/workspace/application` |
+| `/register` | Basarili kayit | `/workspace/identity` |
+| `/workspace/identity` | Email veya SMS onayi ile hesap aktif | `/workspace/profile` |
+| `/workspace/profile` | Profil `%100` | `/workspace/application` |
+| `/workspace/application` | Basvuru validation + submit basarili | `/workspace/review` |
+| Herhangi workspace | Akisi sifirla | `/login` |

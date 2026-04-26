@@ -1,16 +1,17 @@
-import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import type { BannerState, BusyAction } from "../app/demoState";
+import type { AuthMode } from "../app/workflow";
 import type { RegisterForm } from "../types";
-
-type AuthMode = "login" | "register";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 
 interface AuthGatewayProps {
   banner: BannerState | null;
   busyAction: BusyAction | null;
   loginIdentifier: string;
   loginPassword: string;
+  mode: AuthMode;
   registerForm: RegisterForm;
   onLogin: () => Promise<void>;
+  onModeChange: (mode: AuthMode) => void;
   onRegister: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   setLoginIdentifier: Dispatch<SetStateAction<string>>;
   setLoginPassword: Dispatch<SetStateAction<string>>;
@@ -22,15 +23,15 @@ export function AuthGateway({
   busyAction,
   loginIdentifier,
   loginPassword,
+  mode,
   registerForm,
   onLogin,
+  onModeChange,
   onRegister,
   setLoginIdentifier,
   setLoginPassword,
   setRegisterForm,
 }: AuthGatewayProps) {
-  const [mode, setMode] = useState<AuthMode>("login");
-
   return (
     <main className="auth-shell">
       <section className="auth-hero">
@@ -52,14 +53,14 @@ export function AuthGateway({
           <button
             type="button"
             className={mode === "login" ? "auth-tab auth-tab--active" : "auth-tab"}
-            onClick={() => setMode("login")}
+            onClick={() => onModeChange("login")}
           >
             Giris yap
           </button>
           <button
             type="button"
             className={mode === "register" ? "auth-tab auth-tab--active" : "auth-tab"}
-            onClick={() => setMode("register")}
+            onClick={() => onModeChange("register")}
           >
             Kayit ol
           </button>

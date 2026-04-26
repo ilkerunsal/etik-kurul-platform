@@ -8,25 +8,31 @@ Bu dokuman mevcut React istemcisinin ekran ve panel haritasini tanimlar.
 flowchart TD
     A["Auth Gateway"] --> B["Login Form"]
     A --> C["Register Form"]
-    C --> D["Identity & Verification Workspace"]
-    B --> E["Authenticated Workspace"]
+    B --> L["/login"]
+    C --> R["/register"]
+    R --> D["/workspace/identity"]
+    L --> E["/workspace/profile veya /workspace/application"]
     D --> F["NVI Verification Panel"]
     D --> G["Contact Code Panel"]
-    E --> H["Profile Panel"]
-    E --> I["Session & Application Demo Panel"]
+    E --> H["/workspace/profile"]
+    H --> I["/workspace/application"]
     I --> J["Application Preparation Flow"]
-    I --> K["Expert + Committee Flow"]
+    J --> K["/workspace/review"]
+    K --> M["Expert + Committee Flow"]
 ```
 
 ## Ekranlar
 
 | Ekran | URL | Gorunurluk | Amac |
 | --- | --- | --- | --- |
-| Auth Gateway | `/` | `sessionToken` ve `userId` yoksa | Ilk acilista giris veya kayit secimi |
-| Identity & Verification Workspace | `/` | Kayit sonrasi `userId` varsa | NVI, email ve SMS dogrulama adimlari |
-| Authenticated Workspace | `/` | JWT oturumu varsa | Profil, policy probe, basvuru demo ve inceleme akislari |
+| Login | `/login` veya `/` | `sessionToken` ve `userId` yoksa | Mevcut hesapla giris |
+| Register | `/register` | `sessionToken` ve `userId` yoksa | Yeni arastirmaci kaydi |
+| Identity & Verification Workspace | `/workspace/identity` | Kayit sonrasi `userId` varsa | NVI, email ve SMS dogrulama adimlari |
+| Profile Workspace | `/workspace/profile` | Hesap aktif veya JWT oturumu varsa | Login, profil tamamlama ve policy probe |
+| Application Workspace | `/workspace/application` | JWT ve profil esigi uygunsa | Basvuru hazirlama ve submit demo akisi |
+| Review Workspace | `/workspace/review` | Submit edilmis basvuru varsa | Uzman, sekretarya, gundem ve kurul karari akislari |
 
-Not: Uygulama su an tek sayfa uygulama seklindedir. Ayrik route yapisi henuz eklenmedi.
+Not: Uygulama React Router paketi kullanmadan History API ile URL senkronizasyonu yapar. Nginx SPA fallback sayesinde derin linkler Docker ortaminda dogrudan acilir.
 
 ## Auth Gateway
 
@@ -45,17 +51,20 @@ Kayit basarili olunca kullanici ayni sayfada workspace ekranina tasinir ve NVI p
 | Sol durum paneli | Hesap durumu, profil orani, kullanici id, basvuru erisimi, email/SMS/JWT durumlari |
 | Son olaylar | UI tarafindaki son 12 islem kaydi |
 | Ust aksiyon | Mock mesaj kutularini yenileme |
-| Ana panel grid | Kayit, NVI, iletisim kodlari, profil ve basvuru demo panelleri |
+| Akis navigasyonu | Kimlik, profil, basvuru hazirligi ve inceleme adimlari; kilitli adimlar pasif kalir |
+| Ana panel grid | Aktif route'a gore yalnizca ilgili workflow panelleri |
 
 ## Panel Haritasi
 
 | Panel | Baslik | Ana Butonlar | Durum Kosulu |
 | --- | --- | --- | --- |
-| 01 | Kayit formu | Kaydi olustur | Her zaman gorunur, Auth Gateway disinda demo/operasyon panelinde de kalir |
+| 01 | Kayit formu | Kaydi olustur | `/workspace/identity` |
 | 02 | NVI dogrulama | Kimlik dogrulamayi baslat | `pending_identity_check` veya `identity_failed` |
 | 03 | Iletisim kodlari | Yeni email kodu, Email kodunu onayla, Yeni SMS kodu, SMS kodunu onayla | `contact_pending` veya `active` |
-| 04 | Profil olusturma | Profili olustur, Profili guncelle | `active` ve JWT oturumu gerekli |
-| 05 | JWT oturum ve basvuru demosu | Login ol, Me bilgisini getir, Basvurularimi getir, Policy probe, Basvuru demo akisi, Uzman + kurul demo akisi | Login alanlari her zaman gorunur; korumali butonlar JWT ister |
+| 04 | Profil olusturma | Profili olustur, Profili guncelle | `/workspace/profile`; `active` ve JWT oturumu gerekli |
+| 05 | Oturum ve profil yetkisi | Login ol, Me bilgisini getir, Policy probe | `/workspace/profile`; korumali butonlar JWT ister |
+| 03 | Basvuru hazirligi | Basvurularimi getir, Policy probe, Basvuru demo akisi | `/workspace/application` |
+| 04 | Inceleme ve kurul sureci | Basvurularimi getir, Uzman + kurul demo akisi | `/workspace/review` |
 
 ## Kullaniciye Gore Beklenen Giris Noktasi
 
@@ -76,4 +85,3 @@ Kayit basarili olunca kullanici ayni sayfada workspace ekranina tasinir ve NVI p
 | `active` | Login ve profil sureci kullanilabilir |
 | Profil `< %100` veya profil yok | Basvuru policy probe 403/blocked doner |
 | Profil `%100` | Basvuru demo akisi calisabilir |
-

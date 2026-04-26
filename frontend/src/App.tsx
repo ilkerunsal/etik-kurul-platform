@@ -65,7 +65,18 @@ import {
   formatDate,
   mapProfileToForm,
 } from "./app/formatters";
-import { getInitialWorkflowView, type WorkflowStep, type WorkflowView } from "./app/workflow";
+import {
+  getAuthModeFromPath,
+  getAuthPath,
+  getInitialAuthMode,
+  getInitialWorkflowView,
+  getWorkflowPath,
+  getWorkflowViewFromPath,
+  syncBrowserPath,
+  type AuthMode,
+  type WorkflowStep,
+  type WorkflowView,
+} from "./app/workflow";
 import { AuthGateway } from "./components/AuthGateway";
 import { HeroPanel } from "./components/HeroPanel";
 import { IdentityWorkflow } from "./components/workflows/IdentityWorkflow";
@@ -125,6 +136,7 @@ export default function App() {
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
   const [applicationCommitteeCount, setApplicationCommitteeCount] = useState<number | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>(() => getInitialAuthMode());
   const [workflowView, setWorkflowView] = useState<WorkflowView>(() => getInitialWorkflowView(snapshot));
 
   const deferredActivity = useDeferredValue(activity);
@@ -174,7 +186,39 @@ export default function App() {
       done: reviewDone,
     },
   ];
-  const activeWorkflowStep = workflowSteps.find((step) => step.id === workflowView) ?? workflowSteps[0];
+  const requestedWorkflowStep = workflowSteps.find((step) => step.id === workflowView && step.enabled);
+  const fallbackWorkflowStep =
+    workflowSteps.find((step) => step.enabled && !step.done)
+    ?? workflowSteps.find((step) => step.enabled)
+    ?? workflowSteps[0];
+  const routedWorkflowView = (requestedWorkflowStep ?? fallbackWorkflowStep).id;
+  const activeWorkflowStep = workflowSteps.find((step) => step.id === routedWorkflowView) ?? fallbackWorkflowStep;
+
+  useEffect(() => {
+    function handlePopState() {
+      const nextAuthMode = getAuthModeFromPath(window.location.pathname);
+      if (nextAuthMode) {
+        setAuthMode(nextAuthMode);
+      }
+
+      const nextWorkflowView = getWorkflowViewFromPath(window.location.pathname);
+      if (nextWorkflowView) {
+        setWorkflowView(nextWorkflowView);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (shouldShowAuthGateway) {
+      syncBrowserPath(getAuthPath(authMode), true);
+      return;
+    }
+
+    syncBrowserPath(getWorkflowPath(routedWorkflowView), true);
+  }, [authMode, routedWorkflowView, shouldShowAuthGateway]);
 
   useEffect(() => {
     const payload: SnapshotState = {
@@ -278,6 +322,16 @@ export default function App() {
     startTransition(() => {
       setActivity((current) => [createActivity(message, tone), ...current].slice(0, 12));
     });
+  }
+
+  function navigateToAuthMode(nextAuthMode: AuthMode, replace = false) {
+    setAuthMode(nextAuthMode);
+    syncBrowserPath(getAuthPath(nextAuthMode), replace);
+  }
+
+  function navigateToWorkflowView(nextWorkflowView: WorkflowView, replace = false) {
+    setWorkflowView(nextWorkflowView);
+    syncBrowserPath(getWorkflowPath(nextWorkflowView), replace);
   }
 
   function applyUserSnapshot(user: SessionUserResponse) {
@@ -436,7 +490,7 @@ export default function App() {
       setSessionExpiresAt(null);
       setLoginIdentifier(registerForm.email || registerForm.phone);
       setLoginPassword(registerForm.password);
-      setWorkflowView("identity");
+      navigateToWorkflowView("identity");
       setBanner({ tone: "success", title: "Kayit olusturuldu", detail: "Siradaki adim NVI dogrulamasini baslatmak." });
       pushActivity("Kayit tamamlandi. Kimlik dogrulamasi bekleniyor.", "success");
     } catch (error) {
@@ -460,7 +514,7 @@ export default function App() {
       setIdentityResponseCode(response.responseCode);
       await refreshMockInbox(true);
       if (response.success) {
-        setWorkflowView("identity");
+        navigateToWorkflowView("identity", true);
         setBanner({ tone: "success", title: "Kimlik eslestirildi", detail: "Mock email ve SMS kodlari asagida hazir." });
         pushActivity("NVI dogrulamasi basarili. Iletisim kodlari uretildi.", "success");
       } else {
@@ -519,7 +573,7 @@ export default function App() {
         detail: response.accountStatus === "active" ? "Hesap aktif. Profil ve oturum paneli hazir." : "Diger kanali da isterseniz onaylayabilirsiniz.",
       });
       if (response.accountStatus === "active") {
-        setWorkflowView("profile");
+        navigateToWorkflowView("profile");
       }
       pushActivity(`${channelType === "email" ? "Email" : "SMS"} dogrulama kodu onaylandi.`, "success");
     } catch (error) {
@@ -549,7 +603,7 @@ export default function App() {
           detail: `Tamamlama orani: %${response.profileCompletionPercent}.`,
         });
         if (response.profileCompletionPercent >= 100) {
-          setWorkflowView("application");
+          navigateToWorkflowView("application");
         }
         pushActivity("Profil formu guncellendi.", "success");
       } else {
@@ -564,7 +618,7 @@ export default function App() {
           detail: `Tamamlama orani: %${response.profileCompletionPercent}.`,
         });
         if (response.profileCompletionPercent >= 100) {
-          setWorkflowView("application");
+          navigateToWorkflowView("application");
         }
         pushActivity("Profil formu olusturuldu.", "success");
       }
@@ -586,7 +640,7 @@ export default function App() {
       applyUserSnapshot(response.user);
       setUserId(response.user.userId);
       await loadApplications(response.accessToken, currentApplication?.applicationId ?? null);
-      setWorkflowView(response.user.applicationAccess.canOpenApplication ? "application" : "profile");
+      navigateToWorkflowView(response.user.applicationAccess.canOpenApplication ? "application" : "profile");
       setBanner({ tone: "success", title: "Oturum acildi", detail: "JWT token olusturuldu. Artik /auth/me sorgusu yapabilirsiniz." });
       pushActivity("JWT tabanli oturum baslatildi.", "success");
     } catch (error) {
@@ -763,7 +817,7 @@ export default function App() {
       setApplicationCreateState(createdApplication.currentStep);
       setApplicationSubmitStatus(validationResponse.isValid ? 200 : 400);
       setApplicationSubmitState(finalApplication.currentStep);
-      setWorkflowView(validationResponse.isValid ? "review" : "application");
+      navigateToWorkflowView(validationResponse.isValid ? "review" : "application");
       setBanner({
         tone: "success",
         title: "Basvuru akisi tamamlandi",
@@ -959,7 +1013,7 @@ export default function App() {
         title: "Uzman ve kurul gundemi demo akisi tamamlandi",
         detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi, kurul revizyonu yanitlandi ve karar ${committeeDecision.decisionType} olarak kaydedildi.`,
       });
-      setWorkflowView("review");
+      navigateToWorkflowView("review", true);
       pushActivity(
         `Secretariat (${secretariatSession.email}) atama, paketleme ve kurul kararini isledi; expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci iki revizyonu da yanitladi.`,
         "success",
@@ -1008,7 +1062,7 @@ export default function App() {
     setSessionToken("");
     setSessionExpiresAt(null);
     setCurrentUser(null);
-    setWorkflowView(userId ? "profile" : "identity");
+    navigateToWorkflowView(userId ? "profile" : "identity");
     setBanner({ tone: "neutral", title: "Oturum kapatildi", detail: "Yerel token bellegi temizlendi." });
     pushActivity("JWT oturumu temizlendi.", "neutral");
   }
@@ -1065,6 +1119,7 @@ export default function App() {
     setApplicationValidation(null);
     setApplicationCommitteeCount(null);
     setWorkflowView("identity");
+    navigateToAuthMode("login", true);
     window.localStorage.removeItem(STORAGE_KEY);
   }
 
@@ -1075,8 +1130,10 @@ export default function App() {
         busyAction={busyAction}
         loginIdentifier={loginIdentifier}
         loginPassword={loginPassword}
+        mode={authMode}
         registerForm={registerForm}
         onLogin={handleLogin}
+        onModeChange={navigateToAuthMode}
         onRegister={handleRegister}
         setLoginIdentifier={setLoginIdentifier}
         setLoginPassword={setLoginPassword}
@@ -1114,11 +1171,11 @@ export default function App() {
         <WorkflowOverview
           activeStep={activeWorkflowStep}
           steps={workflowSteps}
-          workflowView={workflowView}
-          onSelectWorkflow={setWorkflowView}
+          workflowView={routedWorkflowView}
+          onSelectWorkflow={navigateToWorkflowView}
         />
         <div className="panel-grid">
-          {workflowView === "identity" ? (
+          {routedWorkflowView === "identity" ? (
             <IdentityWorkflow
               busyAction={busyAction}
               canManageContacts={canManageContacts}
@@ -1139,7 +1196,7 @@ export default function App() {
               setRegisterForm={setRegisterForm}
             />
           ) : null}
-          {workflowView === "profile" ? (
+          {routedWorkflowView === "profile" ? (
             <ProfileWorkflow
               busyAction={busyAction}
               canCreateProfile={canCreateProfile}
@@ -1151,7 +1208,7 @@ export default function App() {
               setProfileForm={setProfileForm}
             />
           ) : null}
-          {workflowView !== "identity" ? (
+          {routedWorkflowView !== "identity" ? (
             <SessionWorkflow
               agendaQueueCount={agendaQueueCount}
               agendaState={agendaState}
@@ -1191,7 +1248,7 @@ export default function App() {
               revisionResponseStatus={revisionResponseStatus}
               sessionExpiresAt={sessionExpiresAt}
               sessionToken={sessionToken}
-              workflowView={workflowView}
+              workflowView={routedWorkflowView}
               onCreateApplicationRoute={() => void handleCreateApplicationRoute()}
               onFetchApplications={() => void handleFetchApplications()}
               onFetchSession={() => void handleFetchSession()}
