@@ -26,7 +26,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json")
+  const payload = (contentType.includes("application/json") || contentType.includes("+json"))
     ? ((await response.json()) as ProblemDetailsLike | T)
     : undefined;
 
