@@ -7,6 +7,12 @@ import {
   getApplicationValidationGuidance,
 } from "../../app/applicationGuidance";
 import {
+  getReviewDecisionItems,
+  getReviewProgress,
+  getReviewReadiness,
+  getReviewStageCards,
+} from "../../app/reviewGuidance";
+import {
   formatApplicationAccess,
   formatApplicationRouteStatus,
   formatApplicationStep,
@@ -171,6 +177,35 @@ export function SessionWorkflow({
   const applicationValidationItems = getApplicationValidationGuidance(applicationValidation, applicationSubmitStatus);
   const applicationValidationPassed = applicationValidation?.isValid || applicationSubmitStatus === 200;
   const canRunApplicationDemo = applicationReadiness.ready;
+  const showReviewGuide = workflowView === "review";
+  const reviewReadiness = getReviewReadiness({ currentApplication, hasSession });
+  const reviewStageCards = getReviewStageCards({
+    agendaQueueCount,
+    agendaState,
+    agendaStatus,
+    committeeDecisionState,
+    committeeDecisionStatus,
+    committeeRevisionResponseState,
+    committeeRevisionResponseStatus,
+    committeeRevisionState,
+    committeeRevisionStatus,
+    currentApplication,
+    expertAssignmentState,
+    expertAssignmentStatus,
+    expertDecisionState,
+    expertDecisionStatus,
+    expertQueueCount,
+    expertReviewState,
+    expertReviewStatus,
+    packageQueueCount,
+    packageState,
+    packageStatus,
+    revisionResponseState,
+    revisionResponseStatus,
+  });
+  const reviewProgress = getReviewProgress(reviewStageCards);
+  const reviewDecisionItems = getReviewDecisionItems(reviewStageCards);
+  const canRunReviewDemo = reviewReadiness.ready;
 
   return (
     <section className="panel panel--accent panel--wide">
@@ -255,13 +290,88 @@ export function SessionWorkflow({
           </div>
         </div>
       ) : null}
+      {showReviewGuide ? (
+        <div className="application-guidance">
+          <div className="completion-card completion-card--review">
+            <div className="completion-card__header">
+              <div>
+                <span className="eyebrow">Kurul incelemesi</span>
+                <strong>%{reviewReadiness.isComplete ? 100 : reviewReadiness.percent}</strong>
+              </div>
+              <small>
+                {reviewReadiness.ready
+                  ? "Uzman ve kurul demo akisi calistirilmaya hazir."
+                  : reviewReadiness.isComplete
+                    ? "Kurul karari tamamlandi."
+                    : `${reviewReadiness.completed}/${reviewReadiness.total} on kosul hazir.`}
+              </small>
+            </div>
+            <div
+              className="completion-meter"
+              aria-label={`Kurul inceleme on kosul hazirligi yuzde ${reviewReadiness.isComplete ? 100 : reviewReadiness.percent}`}
+            >
+              <span style={{ width: `${reviewReadiness.isComplete ? 100 : reviewReadiness.percent}%` }} />
+            </div>
+            <ValidationSummary
+              items={reviewReadiness.missing}
+              title="Inceleme on kosullari"
+              tone={reviewReadiness.ready || reviewReadiness.isComplete ? "success" : "neutral"}
+              emptyMessage="JWT ve WaitingExpertAssignment basvurusu hazir."
+            />
+          </div>
+
+          <div className="application-stage-grid" aria-label="Uzman ve kurul demo adimlari">
+            {reviewStageCards.map((card) => (
+              <article className={`application-stage application-stage--${card.tone}`} key={card.number}>
+                <span>{card.number}</span>
+                <strong>{card.title}</strong>
+                <p>{card.description}</p>
+                <small>{card.status}</small>
+              </article>
+            ))}
+          </div>
+
+          <div className="application-demo-grid">
+            <div className="message-preview message-preview--compact">
+              <div className="message-preview__header">
+                <span>Review payload</span>
+                <strong>{reviewProgress.completed}/{reviewProgress.total}</strong>
+              </div>
+              <div className="completion-meter" aria-label={`Kurul demo adim ilerlemesi yuzde ${reviewProgress.percent}`}>
+                <span style={{ width: `${reviewProgress.percent}%` }} />
+              </div>
+              <div className="meta-list">
+                <div><span>Secretariat role</span><strong>secretariat</strong></div>
+                <div><span>Expert role</span><strong>ethics_expert</strong></div>
+                <div><span>Expert note</span><strong>Revizyon + onay</strong></div>
+                <div><span>Researcher response</span><strong>Iki revizyon yaniti</strong></div>
+                <div><span>Committee note</span><strong>Gundem + karar</strong></div>
+                <div><span>Final decision</span><strong>{committeeDecisionStatus === 200 ? "Approved" : "Bekliyor"}</strong></div>
+              </div>
+            </div>
+
+            <div className="message-preview message-preview--compact">
+              <div className="message-preview__header">
+                <span>Karar kontrol listesi</span>
+                <strong>{reviewDecisionItems.length === 0 ? "Tamam" : "Bekliyor"}</strong>
+              </div>
+              <ValidationSummary
+                items={reviewDecisionItems}
+                title="Kurul karari"
+                tone={reviewDecisionItems.length === 0 ? "success" : "neutral"}
+                emptyMessage="Uzman ve kurul karar zinciri tamamlandi."
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="actions actions--cluster">
         {showLoginAction ? <button type="button" className="button" disabled={!loginIdentifier || !loginPassword || busyAction === "login"} onClick={onLogin}>{busyAction === "login" ? "Oturum aciliyor" : "Login ol"}</button> : null}
         <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={onFetchSession}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
         {showApplicationActions ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={onFetchApplications}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button> : null}
         {showPolicyProbeAction ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={onProbeApplicationAccess}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button> : null}
         {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!canRunApplicationDemo || busyAction === "create-application"} onClick={onCreateApplicationRoute}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
-        {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!hasSession || !currentApplication || busyAction === "run-expert-flow"} onClick={onRunExpertWorkflow}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
+        {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!canRunReviewDemo || busyAction === "run-expert-flow"} onClick={onRunExpertWorkflow}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
         <button type="button" className="button button--ghost" disabled={!hasSession} onClick={onLogout}>Oturumu temizle</button>
       </div>
       <div className="session-stack">

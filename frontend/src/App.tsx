@@ -987,7 +987,23 @@ export default function App() {
     const applicationId = currentApplication?.applicationId;
     const applicationStep = currentApplication?.currentStep;
 
-    if (!sessionToken || !applicationId || !applicationStep) {
+    if (!sessionToken) {
+      setBanner({
+        tone: "neutral",
+        title: "Inceleme icin oturum gerekli",
+        detail: "Uzman ve kurul demo akisi icin once aktif arastirmaci JWT oturumu gerekli.",
+      });
+      pushActivity("Kurul demo akisi oturum olmadigi icin baslatilmadi.", "neutral");
+      return;
+    }
+
+    if (!applicationId || !applicationStep) {
+      setBanner({
+        tone: "neutral",
+        title: "Inceleme icin basvuru gerekli",
+        detail: "Once basvuru demo akisiyla WaitingExpertAssignment adimina gelen bir basvuru olusturun.",
+      });
+      pushActivity("Kurul demo akisi secili basvuru olmadigi icin baslatilmadi.", "neutral");
       return;
     }
 

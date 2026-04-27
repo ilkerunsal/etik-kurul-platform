@@ -803,6 +803,16 @@ button {
   color: var(--accent);
 }
 
+.completion-card--review {
+  background:
+    linear-gradient(135deg, rgba(27, 107, 109, 0.12), rgba(255, 255, 255, 0.62)),
+    rgba(255, 255, 255, 0.48);
+}
+
+.completion-card--review .eyebrow {
+  color: #1b6b6d;
+}
+
 .application-stage-grid,
 .application-demo-grid {
   display: grid;
