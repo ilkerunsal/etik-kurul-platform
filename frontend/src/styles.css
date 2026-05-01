@@ -799,8 +799,15 @@ button {
   gap: 16px;
 }
 
+.review-workspace {
+  margin-top: 20px;
+  display: grid;
+  gap: 16px;
+}
+
 .application-operation-grid,
-.application-detail-grid {
+.application-detail-grid,
+.review-operation-grid {
   display: grid;
   gap: 16px;
 }
@@ -812,6 +819,10 @@ button {
 .application-detail-grid {
   grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
   align-items: start;
+}
+
+.review-operation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .operation-card {
@@ -829,6 +840,12 @@ button {
     rgba(255, 250, 242, 0.76);
 }
 
+.operation-card--review {
+  background:
+    radial-gradient(circle at top right, rgba(27, 107, 109, 0.14), transparent 42%),
+    rgba(249, 255, 252, 0.76);
+}
+
 .operation-card--wide {
   grid-column: 1 / -1;
 }
@@ -842,6 +859,21 @@ button {
 
 .operation-card .eyebrow {
   color: var(--accent);
+}
+
+.operation-card--review .eyebrow {
+  color: #1b6b6d;
+}
+
+.review-action-rail {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.review-action-rail .button {
+  width: 100%;
 }
 
 .application-list-grid {
@@ -1090,6 +1122,7 @@ button {
   .inline-form,
   .application-operation-grid,
   .application-detail-grid,
+  .review-operation-grid,
   .application-list-card,
   .application-stage-grid,
   .application-demo-grid,

@@ -90,6 +90,12 @@ import { ProfileWorkflow } from "./components/workflows/ProfileWorkflow";
 import { SessionWorkflow } from "./components/workflows/SessionWorkflow";
 import { WorkflowOverview } from "./components/workflows/WorkflowOverview";
 
+interface ReviewRoleSession {
+  accessToken: string;
+  email: string;
+  userId: string;
+}
+
 export default function App() {
   const snapshot = loadSnapshot();
   const [registerForm, setRegisterForm] = useState(snapshot.registerForm);
@@ -137,6 +143,8 @@ export default function App() {
   const [committeeRevisionResponseState, setCommitteeRevisionResponseState] = useState<string | null>(snapshot.committeeRevisionResponseState);
   const [committeeDecisionStatus, setCommitteeDecisionStatus] = useState<number | null>(snapshot.committeeDecisionStatus);
   const [committeeDecisionState, setCommitteeDecisionState] = useState<string | null>(snapshot.committeeDecisionState);
+  const [secretariatSession, setSecretariatSession] = useState<ReviewRoleSession | null>(null);
+  const [expertSession, setExpertSession] = useState<ReviewRoleSession | null>(null);
   const [currentApplication, setCurrentApplication] = useState<ApplicationSummaryResponse | null>(null);
   const [myApplications, setMyApplications] = useState<ApplicationSummaryResponse[]>([]);
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
@@ -1093,7 +1101,7 @@ export default function App() {
     };
   }
 
-  async function handleRunExpertWorkflow() {
+  function getReviewContext() {
     const applicationId = currentApplication?.applicationId;
     const applicationStep = currentApplication?.currentStep;
 
@@ -1101,156 +1109,578 @@ export default function App() {
       setBanner({
         tone: "neutral",
         title: "Inceleme icin oturum gerekli",
-        detail: "Uzman ve kurul demo akisi icin once aktif arastirmaci JWT oturumu gerekli.",
+        detail: "Uzman ve kurul inceleme akisi icin once aktif arastirmaci JWT oturumu gerekli.",
       });
-      pushActivity("Kurul demo akisi oturum olmadigi icin baslatilmadi.", "neutral");
-      return;
+      pushActivity("Kurul inceleme akisi oturum olmadigi icin baslatilmadi.", "neutral");
+      return null;
     }
 
     if (!applicationId || !applicationStep) {
       setBanner({
         tone: "neutral",
         title: "Inceleme icin basvuru gerekli",
-        detail: "Once basvuru demo akisiyla WaitingExpertAssignment adimina gelen bir basvuru olusturun.",
+        detail: "Once basvuru akisi ile WaitingExpertAssignment adimina gelen bir basvuru olusturun.",
       });
-      pushActivity("Kurul demo akisi secili basvuru olmadigi icin baslatilmadi.", "neutral");
-      return;
+      pushActivity("Kurul inceleme akisi secili basvuru olmadigi icin baslatilmadi.", "neutral");
+      return null;
     }
 
-    if (applicationStep !== "WaitingExpertAssignment") {
+    const reviewSteps = [
+      "WaitingExpertAssignment",
+      "ExpertAssigned",
+      "UnderExpertReview",
+      "ExpertRevisionRequested",
+      "ExpertApproved",
+      "PackageReady",
+      "UnderCommitteeReview",
+      "CommitteeRevisionRequested",
+    ];
+
+    if (!reviewSteps.includes(applicationStep)) {
       setBanner({
         tone: "neutral",
-        title: "Uzman atama akisina hazir degil",
-        detail: "Bu demo yalnizca WaitingExpertAssignment adimindaki basvurular icin calistirilir.",
+        title: "Inceleme akisina hazir degil",
+        detail: `Bu operasyon ${applicationStep} adimindaki basvuru icin calistirilmez.`,
       });
-      pushActivity("Uzman atama demosu uygun olmayan adimda cagrildi.", "neutral");
+      pushActivity("Review operasyonu uygun olmayan adimda cagrildi.", "neutral");
+      return null;
+    }
+
+    return { applicationId, applicationStep };
+  }
+
+  function requireSecretariatSession() {
+    if (!secretariatSession) {
+      setBanner({
+        tone: "neutral",
+        title: "Secretariat oturumu gerekli",
+        detail: "Once review ekraninda mock secretariat ve ethics_expert rollerini hazirlayin.",
+      });
+      pushActivity("Review operasyonu secretariat oturumu olmadigi icin baslatilmadi.", "neutral");
+      return null;
+    }
+
+    return secretariatSession;
+  }
+
+  function requireExpertSession() {
+    if (!expertSession) {
+      setBanner({
+        tone: "neutral",
+        title: "Uzman oturumu gerekli",
+        detail: "Once review ekraninda mock ethics_expert rolunu hazirlayin.",
+      });
+      pushActivity("Review operasyonu uzman oturumu olmadigi icin baslatilmadi.", "neutral");
+      return null;
+    }
+
+    return expertSession;
+  }
+
+  async function refreshCurrentApplicationSnapshot(applicationId: string, fallbackApplication?: ApplicationSummaryResponse) {
+    const applications = await fetchMyApplications(sessionToken);
+    const selectedApplication = fallbackApplication
+      ?? applications.find((application) => application.applicationId === applicationId)
+      ?? await fetchApplication(sessionToken, applicationId);
+
+    startTransition(() => {
+      setMyApplications(applications);
+      setCurrentApplication(selectedApplication);
+    });
+  }
+
+  async function handleProvisionReviewRoles() {
+    setBusyAction("provision-review-roles");
+
+    try {
+      const [nextSecretariatSession, nextExpertSession] = await Promise.all([
+        provisionRoleSession("secretariat", "Secretariat"),
+        provisionRoleSession("ethics_expert", "Expert"),
+      ]);
+
+      startTransition(() => {
+        setSecretariatSession(nextSecretariatSession);
+        setExpertSession(nextExpertSession);
+      });
+      setBanner({
+        tone: "success",
+        title: "Review rolleri hazir",
+        detail: `${nextSecretariatSession.email} ve ${nextExpertSession.email} mock oturumlari olusturuldu.`,
+      });
+      pushActivity("Secretariat ve ethics_expert demo oturumlari hazirlandi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Review rolleri hazirlanamadi", detail: getErrorMessage(error) });
+      pushActivity("Review rolleri hazirlama akisi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleFetchExpertQueue() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
       return;
     }
 
-    setBusyAction("run-expert-flow");
+    setBusyAction("review-operation");
 
     try {
-      const secretariatSession = await provisionRoleSession("secretariat", "Secretariat");
-      const expertSession = await provisionRoleSession("ethics_expert", "Expert");
+      const queue = await fetchExpertAssignmentQueue(secretariat.accessToken);
+      const inQueue = queue.some((application) => application.applicationId === context.applicationId);
 
-      const queue = await fetchExpertAssignmentQueue(secretariatSession.accessToken);
-      const queuedApplication = queue.find((application) => application.applicationId === applicationId);
+      setExpertQueueCount(queue.length);
+      setBanner({
+        tone: inQueue ? "success" : "neutral",
+        title: "Uzman atama kuyrugu okundu",
+        detail: inQueue ? "Secili basvuru atama kuyrugunda." : "Secili basvuru atama kuyrugunda gorunmedi.",
+      });
+      pushActivity("Secretariat uzman atama kuyrugunu okudu.", inQueue ? "success" : "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman kuyrugu okunamadi", detail: getErrorMessage(error) });
+      pushActivity("Uzman atama kuyrugu hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleAssignExpert() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+    const expert = requireExpertSession();
+
+    if (!context || !secretariat || !expert) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const queue = await fetchExpertAssignmentQueue(secretariat.accessToken);
+      const queuedApplication = queue.find((application) => application.applicationId === context.applicationId);
 
       if (!queuedApplication) {
         throw new Error("Secretariat kuyrugunda secili basvuru bulunamadi.");
       }
 
       const assignment = await assignApplicationExpert(
-        secretariatSession.accessToken,
-        applicationId,
-        expertSession.userId,
+        secretariat.accessToken,
+        context.applicationId,
+        expert.userId,
       );
 
-      const expertAssignments = await fetchMyExpertAssignments(expertSession.accessToken);
-      const myAssignment = expertAssignments.find((item) => item.applicationId === applicationId);
+      const expertAssignments = await fetchMyExpertAssignments(expert.accessToken);
+      const myAssignment = expertAssignments.find((item) => item.applicationId === context.applicationId);
 
       if (!myAssignment) {
         throw new Error("Uzmanin atanan is listesinde secili basvuru bulunamadi.");
       }
 
-      const review = await startExpertReview(expertSession.accessToken, applicationId);
-      const revisionRequest = await requestExpertRevision(
-        expertSession.accessToken,
-        applicationId,
-        "UI demo revizyon talebi.",
-      );
-      const revisionResponse = await submitApplicationRevisionResponse(
-        sessionToken,
-        applicationId,
-        "UI demo revizyon yaniti.",
-      );
-      const decision = await approveExpertReview(
-        expertSession.accessToken,
-        applicationId,
-        "UI demo uzman onayi.",
-      );
-      const packageQueue = await fetchApplicationPackageQueue(secretariatSession.accessToken);
-      const packageQueuedApplication = packageQueue.find((application) => application.applicationId === applicationId);
-
-      if (!packageQueuedApplication) {
-        throw new Error("Paketleme kuyrugunda secili basvuru bulunamadi.");
-      }
-
-      const reviewPackage = await prepareApplicationPackage(
-        secretariatSession.accessToken,
-        applicationId,
-        "UI demo sekretarya paket notu.",
-      );
-      const agendaQueue = await fetchCommitteeAgendaQueue(secretariatSession.accessToken);
-      const agendaQueuedApplication = agendaQueue.find((application) => application.applicationId === applicationId);
-
-      if (!agendaQueuedApplication) {
-        throw new Error("Kurul gundemi kuyrugunda secili basvuru bulunamadi.");
-      }
-
-      const agendaItem = await addApplicationToCommitteeAgenda(
-        secretariatSession.accessToken,
-        applicationId,
-        "UI demo kurul gundemi notu.",
-      );
-      const committeeRevisionRequest = await requestCommitteeRevision(
-        secretariatSession.accessToken,
-        applicationId,
-        "UI demo kurul revizyon talebi.",
-      );
-      const committeeRevisionResponse = await submitCommitteeRevisionResponse(
-        sessionToken,
-        applicationId,
-        "UI demo kurul revizyon yaniti.",
-      );
-      const committeeDecision = await approveCommitteeReview(
-        secretariatSession.accessToken,
-        applicationId,
-        "UI demo kurul onayi.",
-      );
-
       startTransition(() => {
         setExpertQueueCount(queue.length);
         setExpertAssignmentStatus(200);
         setExpertAssignmentState(assignment.application.currentStep);
-        setExpertReviewStatus(200);
-        setExpertReviewState(review.application.currentStep);
-        setRevisionResponseStatus(200);
-        setRevisionResponseState(revisionResponse.application.currentStep);
-        setExpertDecisionStatus(200);
-        setExpertDecisionState(decision.application.currentStep);
-        setPackageQueueCount(packageQueue.length);
-        setPackageStatus(200);
-        setPackageState(reviewPackage.application.currentStep);
-        setAgendaQueueCount(agendaQueue.length);
-        setAgendaStatus(200);
-        setAgendaState(agendaItem.application.currentStep);
-        setCommitteeRevisionStatus(200);
-        setCommitteeRevisionState(committeeRevisionRequest.application.currentStep);
-        setCommitteeRevisionResponseStatus(200);
-        setCommitteeRevisionResponseState(committeeRevisionResponse.application.currentStep);
-        setCommitteeDecisionStatus(200);
-        setCommitteeDecisionState(committeeDecision.application.currentStep);
+        setCurrentApplication(assignment.application);
       });
-
-      await Promise.all([
-        refreshSessionState(sessionToken),
-        loadApplications(sessionToken, applicationId),
-      ]);
-
+      await refreshCurrentApplicationSnapshot(context.applicationId, assignment.application);
       setBanner({
         tone: "success",
-        title: "Uzman ve kurul gundemi demo akisi tamamlandi",
-        detail: `${assignment.expertDisplayName} onayi sonrasi paket hazirlandi, kurul revizyonu yanitlandi ve karar ${committeeDecision.decisionType} olarak kaydedildi.`,
+        title: "Uzman atandi",
+        detail: `${assignment.expertDisplayName} secili basvuruya atandi.`,
       });
-      navigateToWorkflowView("review", true);
-      pushActivity(
-        `Secretariat (${secretariatSession.email}) atama, paketleme ve kurul kararini isledi; expert (${expertSession.email}) ${revisionRequest.decisionType} istedi, arastirmaci iki revizyonu da yanitladi.`,
-        "success",
-      );
+      pushActivity("Secretariat uzman atamasini tamamladi.", "success");
     } catch (error) {
-      setBanner({ tone: "error", title: "Uzman ve kurul gundemi demo akisi basarisiz", detail: getErrorMessage(error) });
-      pushActivity("Expert assignment / committee agenda akisi hata verdi.", "error");
+      setBanner({ tone: "error", title: "Uzman atanamadi", detail: getErrorMessage(error) });
+      pushActivity("Uzman atama islemi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleStartExpertReview() {
+    const context = getReviewContext();
+    const expert = requireExpertSession();
+
+    if (!context || !expert) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const review = await startExpertReview(expert.accessToken, context.applicationId);
+
+      startTransition(() => {
+        setExpertReviewStatus(200);
+        setExpertReviewState(review.application.currentStep);
+        setCurrentApplication(review.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, review.application);
+      setBanner({
+        tone: "success",
+        title: "Uzman incelemesi basladi",
+        detail: "Atanan uzman basvuruyu incelemeye aldi.",
+      });
+      pushActivity("Uzman inceleme baslangici kaydedildi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman incelemesi baslatilamadi", detail: getErrorMessage(error) });
+      pushActivity("Uzman inceleme baslatma hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRequestExpertRevision() {
+    const context = getReviewContext();
+    const expert = requireExpertSession();
+
+    if (!context || !expert) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const revisionRequest = await requestExpertRevision(
+        expert.accessToken,
+        context.applicationId,
+        "UI uzman revizyon talebi.",
+      );
+
+      startTransition(() => {
+        setExpertReviewStatus(200);
+        setExpertReviewState(revisionRequest.application.currentStep);
+        setCurrentApplication(revisionRequest.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, revisionRequest.application);
+      setBanner({
+        tone: "success",
+        title: "Uzman revizyon istedi",
+        detail: "Basvuru arastirmaci revizyon yanitini bekliyor.",
+      });
+      pushActivity("Uzman revizyon talebi kaydetti.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman revizyonu istenemedi", detail: getErrorMessage(error) });
+      pushActivity("Uzman revizyon talebi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRespondExpertRevision() {
+    const context = getReviewContext();
+
+    if (!context) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const revisionResponse = await submitApplicationRevisionResponse(
+        sessionToken,
+        context.applicationId,
+        "UI uzman revizyon yaniti.",
+      );
+
+      startTransition(() => {
+        setRevisionResponseStatus(200);
+        setRevisionResponseState(revisionResponse.application.currentStep);
+        setCurrentApplication(revisionResponse.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, revisionResponse.application);
+      setBanner({
+        tone: "success",
+        title: "Uzman revizyonu yanitlandi",
+        detail: "Arastirmaci uzman revizyon talebine yanit verdi.",
+      });
+      pushActivity("Arastirmaci uzman revizyon yanitini gonderdi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman revizyonu yanitlanamadi", detail: getErrorMessage(error) });
+      pushActivity("Uzman revizyon yaniti hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleApproveExpertReview() {
+    const context = getReviewContext();
+    const expert = requireExpertSession();
+
+    if (!context || !expert) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const decision = await approveExpertReview(
+        expert.accessToken,
+        context.applicationId,
+        "UI uzman onayi.",
+      );
+
+      startTransition(() => {
+        setExpertDecisionStatus(200);
+        setExpertDecisionState(decision.application.currentStep);
+        setCurrentApplication(decision.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, decision.application);
+      setBanner({
+        tone: "success",
+        title: "Uzman onayi kaydedildi",
+        detail: "Basvuru sekretarya paketleme kuyruguna tasindi.",
+      });
+      pushActivity("Uzman inceleme kararini Approved olarak kapatti.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Uzman onayi kaydedilemedi", detail: getErrorMessage(error) });
+      pushActivity("Uzman onayi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleFetchPackageQueue() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const packageQueue = await fetchApplicationPackageQueue(secretariat.accessToken);
+      const inQueue = packageQueue.some((application) => application.applicationId === context.applicationId);
+
+      setPackageQueueCount(packageQueue.length);
+      setBanner({
+        tone: inQueue ? "success" : "neutral",
+        title: "Paketleme kuyrugu okundu",
+        detail: inQueue ? "Secili basvuru paketleme kuyrugunda." : "Secili basvuru paketleme kuyrugunda gorunmedi.",
+      });
+      pushActivity("Secretariat paketleme kuyrugunu okudu.", inQueue ? "success" : "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Paket kuyrugu okunamadi", detail: getErrorMessage(error) });
+      pushActivity("Paketleme kuyrugu hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handlePreparePackage() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const reviewPackage = await prepareApplicationPackage(
+        secretariat.accessToken,
+        context.applicationId,
+        "UI sekretarya paket notu.",
+      );
+
+      startTransition(() => {
+        setPackageStatus(200);
+        setPackageState(reviewPackage.application.currentStep);
+        setCurrentApplication(reviewPackage.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, reviewPackage.application);
+      setBanner({
+        tone: "success",
+        title: "Paket hazirlandi",
+        detail: "Secretariat kurul gundemi icin review paketini hazirladi.",
+      });
+      pushActivity("Secretariat paket hazirlama islemini tamamladi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Paket hazirlanamadi", detail: getErrorMessage(error) });
+      pushActivity("Paket hazirlama hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleFetchAgendaQueue() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const agendaQueue = await fetchCommitteeAgendaQueue(secretariat.accessToken);
+      const inQueue = agendaQueue.some((application) => application.applicationId === context.applicationId);
+
+      setAgendaQueueCount(agendaQueue.length);
+      setBanner({
+        tone: inQueue ? "success" : "neutral",
+        title: "Kurul gundemi kuyrugu okundu",
+        detail: inQueue ? "Secili basvuru gundem kuyrugunda." : "Secili basvuru gundem kuyrugunda gorunmedi.",
+      });
+      pushActivity("Secretariat kurul gundemi kuyrugunu okudu.", inQueue ? "success" : "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Gundem kuyrugu okunamadi", detail: getErrorMessage(error) });
+      pushActivity("Kurul gundemi kuyrugu hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleAddAgenda() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const agendaItem = await addApplicationToCommitteeAgenda(
+        secretariat.accessToken,
+        context.applicationId,
+        "UI kurul gundemi notu.",
+      );
+
+      startTransition(() => {
+        setAgendaStatus(200);
+        setAgendaState(agendaItem.application.currentStep);
+        setCurrentApplication(agendaItem.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, agendaItem.application);
+      setBanner({
+        tone: "success",
+        title: "Kurul gundemine eklendi",
+        detail: "Hazir paket kurul incelemesine alindi.",
+      });
+      pushActivity("Secretariat basvuruyu kurul gundemine ekledi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Gundeme eklenemedi", detail: getErrorMessage(error) });
+      pushActivity("Kurul gundemine ekleme hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRequestCommitteeRevision() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const committeeRevisionRequest = await requestCommitteeRevision(
+        secretariat.accessToken,
+        context.applicationId,
+        "UI kurul revizyon talebi.",
+      );
+
+      startTransition(() => {
+        setCommitteeRevisionStatus(200);
+        setCommitteeRevisionState(committeeRevisionRequest.application.currentStep);
+        setCurrentApplication(committeeRevisionRequest.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, committeeRevisionRequest.application);
+      setBanner({
+        tone: "success",
+        title: "Kurul revizyon istedi",
+        detail: "Basvuru arastirmaci kurul revizyon yanitini bekliyor.",
+      });
+      pushActivity("Kurul revizyon talebi kaydedildi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Kurul revizyonu istenemedi", detail: getErrorMessage(error) });
+      pushActivity("Kurul revizyon talebi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRespondCommitteeRevision() {
+    const context = getReviewContext();
+
+    if (!context) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const committeeRevisionResponse = await submitCommitteeRevisionResponse(
+        sessionToken,
+        context.applicationId,
+        "UI kurul revizyon yaniti.",
+      );
+
+      startTransition(() => {
+        setCommitteeRevisionResponseStatus(200);
+        setCommitteeRevisionResponseState(committeeRevisionResponse.application.currentStep);
+        setCurrentApplication(committeeRevisionResponse.application);
+      });
+      await refreshCurrentApplicationSnapshot(context.applicationId, committeeRevisionResponse.application);
+      setBanner({
+        tone: "success",
+        title: "Kurul revizyonu yanitlandi",
+        detail: "Arastirmaci kurul revizyon talebine yanit verdi.",
+      });
+      pushActivity("Arastirmaci kurul revizyon yanitini gonderdi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Kurul revizyonu yanitlanamadi", detail: getErrorMessage(error) });
+      pushActivity("Kurul revizyon yaniti hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleApproveCommitteeReview() {
+    const context = getReviewContext();
+    const secretariat = requireSecretariatSession();
+
+    if (!context || !secretariat) {
+      return;
+    }
+
+    setBusyAction("review-operation");
+
+    try {
+      const committeeDecision = await approveCommitteeReview(
+        secretariat.accessToken,
+        context.applicationId,
+        "UI kurul onayi.",
+      );
+
+      startTransition(() => {
+        setCommitteeDecisionStatus(200);
+        setCommitteeDecisionState(committeeDecision.application.currentStep);
+        setCurrentApplication(committeeDecision.application);
+      });
+      await Promise.all([
+        refreshSessionState(sessionToken),
+        refreshCurrentApplicationSnapshot(context.applicationId, committeeDecision.application),
+      ]);
+      setBanner({
+        tone: "success",
+        title: "Kurul karari kaydedildi",
+        detail: `Kurul karari ${committeeDecision.decisionType} olarak kaydedildi.`,
+      });
+      pushActivity("Kurul kararini Approved olarak kaydetti.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Kurul karari kaydedilemedi", detail: getErrorMessage(error) });
+      pushActivity("Kurul karari hata verdi.", "error");
     } finally {
       setBusyAction(null);
     }
@@ -1285,6 +1715,8 @@ export default function App() {
     setCommitteeRevisionResponseState(null);
     setCommitteeDecisionStatus(null);
     setCommitteeDecisionState(null);
+    setSecretariatSession(null);
+    setExpertSession(null);
     setCurrentApplication(null);
     setMyApplications([]);
     setApplicationValidation(null);
@@ -1344,6 +1776,8 @@ export default function App() {
     setCommitteeRevisionResponseState(next.committeeRevisionResponseState);
     setCommitteeDecisionStatus(next.committeeDecisionStatus);
     setCommitteeDecisionState(next.committeeDecisionState);
+    setSecretariatSession(null);
+    setExpertSession(null);
     setCurrentApplication(null);
     setMyApplications([]);
     setApplicationValidation(null);
@@ -1462,6 +1896,7 @@ export default function App() {
               currentUser={currentUser}
               expertAssignmentState={expertAssignmentState}
               expertAssignmentStatus={expertAssignmentStatus}
+              expertSession={expertSession}
               expertDecisionState={expertDecisionState}
               expertDecisionStatus={expertDecisionStatus}
               expertQueueCount={expertQueueCount}
@@ -1476,18 +1911,32 @@ export default function App() {
               packageStatus={packageStatus}
               revisionResponseState={revisionResponseState}
               revisionResponseStatus={revisionResponseStatus}
+              secretariatSession={secretariatSession}
               sessionExpiresAt={sessionExpiresAt}
               sessionToken={sessionToken}
               workflowView={routedWorkflowView}
+              onAddAgenda={() => void handleAddAgenda()}
+              onApproveCommittee={() => void handleApproveCommitteeReview()}
+              onApproveExpert={() => void handleApproveExpertReview()}
+              onAssignExpert={() => void handleAssignExpert()}
               onCreateApplicationDraft={(title, summary) => void handleCreateApplicationDraft(title, summary)}
+              onFetchAgendaQueue={() => void handleFetchAgendaQueue()}
               onFetchApplications={() => void handleFetchApplications()}
+              onFetchExpertQueue={() => void handleFetchExpertQueue()}
+              onFetchPackageQueue={() => void handleFetchPackageQueue()}
               onFetchSession={() => void handleFetchSession()}
               onLogin={() => void handleLogin()}
               onLogout={handleLogout}
               onPrepareApplicationSubmission={() => void handlePrepareApplicationSubmission()}
+              onPreparePackage={() => void handlePreparePackage()}
+              onProvisionReviewRoles={() => void handleProvisionReviewRoles()}
               onProbeApplicationAccess={() => void handleProbeApplicationAccess()}
-              onRunExpertWorkflow={() => void handleRunExpertWorkflow()}
+              onRequestCommitteeRevision={() => void handleRequestCommitteeRevision()}
+              onRequestExpertRevision={() => void handleRequestExpertRevision()}
+              onRespondCommitteeRevision={() => void handleRespondCommitteeRevision()}
+              onRespondExpertRevision={() => void handleRespondExpertRevision()}
               onSelectApplication={(applicationId) => void handleSelectApplication(applicationId)}
+              onStartExpertReview={() => void handleStartExpertReview()}
               setLoginIdentifier={setLoginIdentifier}
               setLoginPassword={setLoginPassword}
             />

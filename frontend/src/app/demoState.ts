@@ -53,7 +53,8 @@ export type BusyAction =
   | "create-application"
   | "prepare-application"
   | "select-application"
-  | "run-expert-flow";
+  | "provision-review-roles"
+  | "review-operation";
 
 export interface BannerState {
   tone: "success" | "error" | "neutral";

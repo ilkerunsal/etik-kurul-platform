@@ -69,7 +69,17 @@ function completedTone(isComplete: boolean, status: number | null) {
 }
 
 export function getReviewReadiness({ currentApplication, hasSession }: ReviewReadinessInput) {
-  const readyStep = currentApplication?.currentStep === "WaitingExpertAssignment";
+  const reviewSteps = [
+    "WaitingExpertAssignment",
+    "ExpertAssigned",
+    "UnderExpertReview",
+    "ExpertRevisionRequested",
+    "ExpertApproved",
+    "PackageReady",
+    "UnderCommitteeReview",
+    "CommitteeRevisionRequested",
+  ];
+  const readyStep = currentApplication ? reviewSteps.includes(currentApplication.currentStep) : false;
   const completed = currentApplication?.currentStep === "Approved";
   const checks = [hasSession, !!currentApplication, readyStep || completed];
   const missing: string[] = [];
