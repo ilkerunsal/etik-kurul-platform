@@ -793,6 +793,89 @@ button {
   gap: 16px;
 }
 
+.application-workspace {
+  margin-top: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.application-operation-grid,
+.application-detail-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.application-operation-grid {
+  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr);
+}
+
+.application-detail-grid {
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
+}
+
+.operation-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(255, 250, 244, 0.78)),
+    var(--surface);
+}
+
+.operation-card--draft {
+  background:
+    radial-gradient(circle at top right, rgba(188, 97, 48, 0.14), transparent 42%),
+    rgba(255, 250, 242, 0.76);
+}
+
+.operation-card--wide {
+  grid-column: 1 / -1;
+}
+
+.operation-card h4 {
+  margin: 6px 0 0;
+  font-family: "Newsreader", serif;
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  line-height: 1;
+}
+
+.operation-card .eyebrow {
+  color: var(--accent);
+}
+
+.application-list-grid {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.application-list-card {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(31, 23, 16, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.application-list-card--active {
+  border-color: rgba(18, 99, 78, 0.24);
+  background: rgba(18, 99, 78, 0.08);
+}
+
+.application-list-card strong,
+.application-list-card small {
+  display: block;
+}
+
+.application-list-card small {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
 .completion-card--application {
   background:
     linear-gradient(135deg, rgba(188, 97, 48, 0.12), rgba(255, 255, 255, 0.62)),
@@ -1005,6 +1088,9 @@ button {
   .channel-grid,
   .identity-summary,
   .inline-form,
+  .application-operation-grid,
+  .application-detail-grid,
+  .application-list-card,
   .application-stage-grid,
   .application-demo-grid,
   .session-stack,

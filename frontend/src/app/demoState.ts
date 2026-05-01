@@ -51,6 +51,8 @@ export type BusyAction =
   | "fetch-applications"
   | "probe-application"
   | "create-application"
+  | "prepare-application"
+  | "select-application"
   | "run-expert-flow";
 
 export interface BannerState {

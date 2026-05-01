@@ -30,6 +30,7 @@ import type {
   ApplicationValidationResponse,
   SessionUserResponse,
 } from "../../types";
+import { ApplicationWorkspace } from "./ApplicationWorkspace";
 import { ValidationSummary } from "../ValidationSummary";
 
 interface SessionWorkflowProps {
@@ -72,13 +73,15 @@ interface SessionWorkflowProps {
   sessionExpiresAt: string | null;
   sessionToken: string;
   workflowView: WorkflowView;
-  onCreateApplicationRoute: () => void;
+  onCreateApplicationDraft: (title: string, summary: string) => void;
   onFetchApplications: () => void;
   onFetchSession: () => void;
   onLogin: () => void;
   onLogout: () => void;
+  onPrepareApplicationSubmission: () => void;
   onProbeApplicationAccess: () => void;
   onRunExpertWorkflow: () => void;
+  onSelectApplication: (applicationId: string) => void;
   setLoginIdentifier: Dispatch<SetStateAction<string>>;
   setLoginPassword: Dispatch<SetStateAction<string>>;
 }
@@ -147,13 +150,15 @@ export function SessionWorkflow({
   sessionExpiresAt,
   sessionToken,
   workflowView,
-  onCreateApplicationRoute,
+  onCreateApplicationDraft,
   onFetchApplications,
   onFetchSession,
   onLogin,
   onLogout,
+  onPrepareApplicationSubmission,
   onProbeApplicationAccess,
   onRunExpertWorkflow,
+  onSelectApplication,
   setLoginIdentifier,
   setLoginPassword,
 }: SessionWorkflowProps) {
@@ -176,7 +181,6 @@ export function SessionWorkflow({
   const applicationProgress = getApplicationStageProgress(applicationStageCards);
   const applicationValidationItems = getApplicationValidationGuidance(applicationValidation, applicationSubmitStatus);
   const applicationValidationPassed = applicationValidation?.isValid || applicationSubmitStatus === 200;
-  const canRunApplicationDemo = applicationReadiness.ready;
   const showReviewGuide = workflowView === "review";
   const reviewReadiness = getReviewReadiness({ currentApplication, hasSession });
   const reviewStageCards = getReviewStageCards({
@@ -221,74 +225,21 @@ export function SessionWorkflow({
         <label className="field"><span>Sifre</span><input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
       </div>
       {showApplicationGuide ? (
-        <div className="application-guidance">
-          <div className="completion-card completion-card--application">
-            <div className="completion-card__header">
-              <div>
-                <span className="eyebrow">Basvuru hazirligi</span>
-                <strong>%{applicationReadiness.percent}</strong>
-              </div>
-              <small>
-                {applicationReadiness.ready
-                  ? "Basvuru demo akisi calistirilmaya hazir."
-                  : `${applicationReadiness.completed}/${applicationReadiness.total} on kosul hazir.`}
-              </small>
-            </div>
-            <div className="completion-meter" aria-label={`Basvuru on kosul hazirligi yuzde ${applicationReadiness.percent}`}>
-              <span style={{ width: `${applicationReadiness.percent}%` }} />
-            </div>
-            <ValidationSummary
-              items={applicationReadiness.missing}
-              title="Basvuru on kosullari"
-              tone={applicationReadiness.ready ? "success" : "neutral"}
-              emptyMessage="JWT, aktif hesap, profil esigi ve CanOpenApplication hazir."
-            />
-          </div>
-
-          <div className="application-stage-grid" aria-label="Basvuru demo adimlari">
-            {applicationStageCards.map((card) => (
-              <article className={`application-stage application-stage--${card.tone}`} key={card.number}>
-                <span>{card.number}</span>
-                <strong>{card.title}</strong>
-                <p>{card.description}</p>
-                <small>{card.status}</small>
-              </article>
-            ))}
-          </div>
-
-          <div className="application-demo-grid">
-            <div className="message-preview message-preview--compact">
-              <div className="message-preview__header">
-                <span>Demo payload</span>
-                <strong>{applicationProgress.completed}/{applicationProgress.total}</strong>
-              </div>
-              <div className="completion-meter" aria-label={`Basvuru demo adim ilerlemesi yuzde ${applicationProgress.percent}`}>
-                <span style={{ width: `${applicationProgress.percent}%` }} />
-              </div>
-              <div className="meta-list">
-                <div><span>Taslak</span><strong>Demo Basvurusu</strong></div>
-                <div><span>Entry mode</span><strong>Guided</strong></div>
-                <div><span>Intake</span><strong>clinical / 12 katilimci</strong></div>
-                <div><span>Form</span><strong>clinical-main / %100</strong></div>
-                <div><span>Dokuman</span><strong>consent.pdf</strong></div>
-                <div><span>Submit hedefi</span><strong>WaitingExpertAssignment</strong></div>
-              </div>
-            </div>
-
-            <div className="message-preview message-preview--compact">
-              <div className="message-preview__header">
-                <span>Validation checklist</span>
-                <strong>{applicationValidationPassed ? "Passed" : applicationValidation ? "Blocked" : "Bekliyor"}</strong>
-              </div>
-              <ValidationSummary
-                items={applicationValidationItems}
-                title="Sistem dogrulamasi"
-                tone={applicationValidationPassed ? "success" : applicationValidation ? "error" : "neutral"}
-                emptyMessage="Checklist bos dondu; basvuru sistem dogrulamasindan gecti."
-              />
-            </div>
-          </div>
-        </div>
+        <ApplicationWorkspace
+          applicationValidation={applicationValidation}
+          applicationValidationItems={applicationValidationItems}
+          applicationValidationPassed={applicationValidationPassed}
+          busyAction={busyAction}
+          currentApplication={currentApplication}
+          myApplications={myApplications}
+          progress={applicationProgress}
+          readiness={applicationReadiness}
+          stageCards={applicationStageCards}
+          onCreateDraft={onCreateApplicationDraft}
+          onFetchApplications={onFetchApplications}
+          onPrepareSubmission={onPrepareApplicationSubmission}
+          onSelectApplication={onSelectApplication}
+        />
       ) : null}
       {showReviewGuide ? (
         <div className="application-guidance">
@@ -370,7 +321,6 @@ export function SessionWorkflow({
         <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-session"} onClick={onFetchSession}>{busyAction === "fetch-session" ? "Sorgulaniyor" : "Me bilgisini getir"}</button>
         {showApplicationActions ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "fetch-applications"} onClick={onFetchApplications}>{busyAction === "fetch-applications" ? "Listeleniyor" : "Basvurularimi getir"}</button> : null}
         {showPolicyProbeAction ? <button type="button" className="button button--ghost" disabled={!hasSession || busyAction === "probe-application"} onClick={onProbeApplicationAccess}>{busyAction === "probe-application" ? "Probe calisiyor" : "Policy probe"}</button> : null}
-        {workflowView === "application" ? <button type="button" className="button button--ghost" disabled={!canRunApplicationDemo || busyAction === "create-application"} onClick={onCreateApplicationRoute}>{busyAction === "create-application" ? "Akis calisiyor" : "Basvuru demo akisi"}</button> : null}
         {workflowView === "review" ? <button type="button" className="button button--ghost" disabled={!canRunReviewDemo || busyAction === "run-expert-flow"} onClick={onRunExpertWorkflow}>{busyAction === "run-expert-flow" ? "Karar akisi calisiyor" : "Uzman + kurul demo akisi"}</button> : null}
         <button type="button" className="button button--ghost" disabled={!hasSession} onClick={onLogout}>Oturumu temizle</button>
       </div>

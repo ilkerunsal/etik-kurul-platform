@@ -810,25 +810,25 @@ export default function App() {
     }
   }
 
-  async function handleCreateApplicationRoute() {
+  function canStartApplicationOperation() {
     if (!sessionToken) {
       setBanner({
         tone: "neutral",
         title: "Basvuru icin oturum gerekli",
-        detail: "Demo akisi JWT olmadan POST /applications cagrisi yapmaz.",
+        detail: "Basvuru islemleri JWT olmadan korumali endpoint cagrisi yapmaz.",
       });
-      pushActivity("Basvuru demo akisi oturum olmadigi icin baslatilmadi.", "neutral");
-      return;
+      pushActivity("Basvuru islemi oturum olmadigi icin baslatilmadi.", "neutral");
+      return false;
     }
 
     if (!currentUser) {
       setBanner({
         tone: "neutral",
         title: "Kullanici ozeti gerekli",
-        detail: "Basvuru demo akisi oncesi /auth/me bilgisini yukleyin.",
+        detail: "Basvuru islemleri oncesi /auth/me bilgisini yukleyin.",
       });
-      pushActivity("Basvuru demo akisi kullanici ozeti olmadan baslatilmadi.", "neutral");
-      return;
+      pushActivity("Basvuru islemi kullanici ozeti olmadan baslatilmadi.", "neutral");
+      return false;
     }
 
     if (!currentUser.applicationAccess.canOpenApplication) {
@@ -837,11 +837,93 @@ export default function App() {
         title: "Basvuru on kosullari tamamlanmadi",
         detail: `CanOpenApplication izin vermiyor: ${currentUser.applicationAccess.reasonCode}.`,
       });
-      pushActivity("Basvuru demo akisi policy on kosulu nedeniyle engellendi.", "neutral");
+      pushActivity("Basvuru islemi policy on kosulu nedeniyle engellendi.", "neutral");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleCreateApplicationDraft(title: string, summary: string) {
+    if (!canStartApplicationOperation()) {
       return;
     }
 
     setBusyAction("create-application");
+
+    try {
+      const createdApplication = await createApplication(
+        sessionToken,
+        title,
+        summary,
+      );
+      const applications = await fetchMyApplications(sessionToken);
+
+      startTransition(() => {
+        setApplicationCreateStatus(201);
+        setApplicationCreateState(createdApplication.currentStep);
+        setApplicationSubmitStatus(null);
+        setApplicationSubmitState(null);
+        setApplicationValidation(null);
+        setApplicationCommitteeCount(null);
+        setMyApplications(applications);
+        setCurrentApplication(createdApplication);
+      });
+      navigateToWorkflowView("application");
+      setBanner({
+        tone: "success",
+        title: "Taslak olusturuldu",
+        detail: "Basvuru taslagi kaydedildi. Siradaki adim secili taslagi hazirlayip sistem dogrulamasina gondermek.",
+      });
+      pushActivity(`POST /applications ile taslak olusturuldu: ${title}.`, "success");
+    } catch (error) {
+      if (isApiErrorStatus(error, 403)) {
+        setApplicationCreateStatus(403);
+        setApplicationCreateState("blocked");
+        setBanner({
+          tone: "neutral",
+          title: "Route policy tarafindan engellendi",
+          detail: "POST /applications istegi 403 dondu.",
+        });
+        pushActivity("POST /applications 403 dondu.", "neutral");
+      } else {
+        setBanner({ tone: "error", title: "Taslak olusturulamadi", detail: getErrorMessage(error) });
+        pushActivity("Taslak olusturma istegi hata verdi.", "error");
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handlePrepareApplicationSubmission() {
+    const applicationId = currentApplication?.applicationId;
+    const currentStep = currentApplication?.currentStep;
+
+    if (!canStartApplicationOperation()) {
+      return;
+    }
+
+    if (!applicationId || !currentStep) {
+      setBanner({
+        tone: "neutral",
+        title: "Hazirlanacak basvuru secilmedi",
+        detail: "Once yeni taslak olusturun veya basvuru listesinden bir kayit secin.",
+      });
+      pushActivity("Basvuru hazirlama secili taslak olmadigi icin baslatilmadi.", "neutral");
+      return;
+    }
+
+    if (["WaitingExpertAssignment", "Approved", "Rejected", "Withdrawn", "Closed"].includes(currentStep)) {
+      setBanner({
+        tone: "neutral",
+        title: "Basvuru hazirlik adimi kapali",
+        detail: `Secili basvuru ${currentStep} adiminda; bu adimda tekrar submit edilmez.`,
+      });
+      pushActivity("Basvuru hazirlama uygun olmayan adimda cagrildi.", "neutral");
+      return;
+    }
+
+    setBusyAction("prepare-application");
 
     try {
       const committees = await fetchCommittees(sessionToken);
@@ -851,13 +933,9 @@ export default function App() {
         throw new Error("Aktif komite bulunamadi.");
       }
 
-      const createdApplication = await createApplication(
-        sessionToken,
-        "Demo Basvurusu",
-        "UI uzerinden olusturulan applications demo akisi.",
-      );
-      await setApplicationEntryMode(sessionToken, createdApplication.applicationId, "Guided");
-      await saveApplicationIntake(sessionToken, createdApplication.applicationId, {
+      const sourceApplication = await fetchApplication(sessionToken, applicationId);
+      await setApplicationEntryMode(sessionToken, applicationId, "Guided");
+      await saveApplicationIntake(sessionToken, applicationId, {
         answers: {
           researchArea: "clinical",
           participantCount: 12,
@@ -866,24 +944,24 @@ export default function App() {
         suggestedCommitteeId: selectedCommittee.committeeId,
         alternativeCommittees: [selectedCommittee.committeeId],
         confidenceScore: 0.93,
-        explanationText: "UI demo intake verisi.",
+        explanationText: "UI guided intake verisi.",
       });
 
       const committeeSelection = await selectApplicationCommittee(
         sessionToken,
-        createdApplication.applicationId,
+        applicationId,
         selectedCommittee.committeeId,
         "guided",
       );
 
       const formResponse = await saveApplicationForm(
         sessionToken,
-        createdApplication.applicationId,
+        applicationId,
         "clinical-main",
         {
           versionNo: 1,
           data: {
-            studyTitle: "Demo Basvurusu",
+            studyTitle: sourceApplication.title ?? "Etik Kurul Basvurusu",
             participantCount: 12,
             method: "Prospective",
           },
@@ -893,22 +971,22 @@ export default function App() {
 
       await addApplicationDocument(
         sessionToken,
-        createdApplication.applicationId,
+        applicationId,
         {
           documentType: "consent_form",
           sourceType: "upload",
           originalFileName: "consent.pdf",
-          storageKey: "mock://documents/consent.pdf",
+          storageKey: `mock://documents/${applicationId}/consent.pdf`,
           mimeType: "application/pdf",
           versionNo: 1,
           isRequired: true,
         },
       );
 
-      const validationResponse = await validateApplication(sessionToken, createdApplication.applicationId);
+      const validationResponse = await validateApplication(sessionToken, applicationId);
       const finalApplication = validationResponse.isValid
-        ? await submitApplication(sessionToken, createdApplication.applicationId)
-        : await fetchApplication(sessionToken, createdApplication.applicationId);
+        ? await submitApplication(sessionToken, applicationId)
+        : await fetchApplication(sessionToken, applicationId);
       const applications = await fetchMyApplications(sessionToken);
 
       startTransition(() => {
@@ -918,21 +996,21 @@ export default function App() {
         setApplicationValidation(validationResponse);
       });
       setApplicationCreateStatus(201);
-      setApplicationCreateState(createdApplication.currentStep);
+      setApplicationCreateState(sourceApplication.currentStep);
       setApplicationSubmitStatus(validationResponse.isValid ? 200 : 400);
       setApplicationSubmitState(finalApplication.currentStep);
       navigateToWorkflowView(validationResponse.isValid ? "review" : "application");
       setBanner({
         tone: "success",
-        title: "Basvuru akisi tamamlandi",
+        title: "Basvuru hazirlandi",
         detail: validationResponse.isValid
-          ? "Taslak olusturuldu, sistem dogrulamasini gecti ve uzman kuyruguna gonderildi."
-          : "Taslak olusturuldu fakat validation tabani bloklandi.",
+          ? "Secili basvuru sistem dogrulamasini gecti ve uzman kuyruguna gonderildi."
+          : "Secili basvuru validation tabani bloklandi.",
       });
       pushActivity(
         validationResponse.isValid
-          ? `Applications akisi create -> entry mode -> intake -> committee -> form -> document -> validate -> submit ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`
-          : `Applications akisi create -> entry mode -> intake -> committee -> form -> document -> validate ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`,
+          ? `Applications akisi entry mode -> intake -> committee -> form -> document -> validate -> submit ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`
+          : `Applications akisi entry mode -> intake -> committee -> form -> document -> validate ile tamamlandi (${committeeSelection.currentStep}, form %${formResponse.completionPercent}).`,
         validationResponse.isValid ? "success" : "neutral",
       );
     } catch (error) {
@@ -947,14 +1025,46 @@ export default function App() {
         setApplicationCommitteeCount(null);
         setBanner({
           tone: "neutral",
-          title: "Route policy tarafindan engellendi",
-          detail: "POST /applications istegi 403 dondu.",
+          title: "Basvuru hazirlama engellendi",
+          detail: "Hazirlik veya submit endpointlerinden biri 403 dondu.",
         });
-        pushActivity("POST /applications 403 dondu.", "neutral");
+        pushActivity("Basvuru hazirlama akisi 403 dondu.", "neutral");
       } else {
-        setBanner({ tone: "error", title: "Route cagrisi basarisiz", detail: getErrorMessage(error) });
-        pushActivity("POST /applications hata verdi.", "error");
+        setBanner({ tone: "error", title: "Basvuru hazirlanamadi", detail: getErrorMessage(error) });
+        pushActivity("Basvuru hazirlama akisi hata verdi.", "error");
       }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleSelectApplication(applicationId: string) {
+    if (!sessionToken) {
+      return;
+    }
+
+    setBusyAction("select-application");
+
+    try {
+      const [selectedApplication, applications] = await Promise.all([
+        fetchApplication(sessionToken, applicationId),
+        fetchMyApplications(sessionToken),
+      ]);
+
+      startTransition(() => {
+        setCurrentApplication(selectedApplication);
+        setMyApplications(applications);
+        setApplicationValidation(null);
+      });
+      setBanner({
+        tone: "neutral",
+        title: "Basvuru secildi",
+        detail: `${selectedApplication.title ?? selectedApplication.applicationId.slice(0, 8)} calisma alanina alindi.`,
+      });
+      pushActivity("Basvuru listeden secildi.", "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Basvuru secilemedi", detail: getErrorMessage(error) });
+      pushActivity("Basvuru detay sorgusu basarisiz oldu.", "error");
     } finally {
       setBusyAction(null);
     }
@@ -1369,13 +1479,15 @@ export default function App() {
               sessionExpiresAt={sessionExpiresAt}
               sessionToken={sessionToken}
               workflowView={routedWorkflowView}
-              onCreateApplicationRoute={() => void handleCreateApplicationRoute()}
+              onCreateApplicationDraft={(title, summary) => void handleCreateApplicationDraft(title, summary)}
               onFetchApplications={() => void handleFetchApplications()}
               onFetchSession={() => void handleFetchSession()}
               onLogin={() => void handleLogin()}
               onLogout={handleLogout}
+              onPrepareApplicationSubmission={() => void handlePrepareApplicationSubmission()}
               onProbeApplicationAccess={() => void handleProbeApplicationAccess()}
               onRunExpertWorkflow={() => void handleRunExpertWorkflow()}
+              onSelectApplication={(applicationId) => void handleSelectApplication(applicationId)}
               setLoginIdentifier={setLoginIdentifier}
               setLoginPassword={setLoginPassword}
             />
