@@ -1,6 +1,7 @@
 import type { ApplicationSummaryResponse } from "../types";
 import { formatApplicationStep, formatExpertWorkflowStatus } from "./formatters";
 import type { GuidanceTone } from "./applicationGuidance";
+import { isReviewCompletedStep, isReviewFlowStep } from "./reviewFlow";
 
 export interface ReviewGuidanceCard {
   description: string;
@@ -69,18 +70,8 @@ function completedTone(isComplete: boolean, status: number | null) {
 }
 
 export function getReviewReadiness({ currentApplication, hasSession }: ReviewReadinessInput) {
-  const reviewSteps = [
-    "WaitingExpertAssignment",
-    "ExpertAssigned",
-    "UnderExpertReview",
-    "ExpertRevisionRequested",
-    "ExpertApproved",
-    "PackageReady",
-    "UnderCommitteeReview",
-    "CommitteeRevisionRequested",
-  ];
-  const readyStep = currentApplication ? reviewSteps.includes(currentApplication.currentStep) : false;
-  const completed = currentApplication?.currentStep === "Approved";
+  const readyStep = isReviewFlowStep(currentApplication?.currentStep);
+  const completed = isReviewCompletedStep(currentApplication?.currentStep);
   const checks = [hasSession, !!currentApplication, readyStep || completed];
   const missing: string[] = [];
 

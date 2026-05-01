@@ -83,6 +83,7 @@ import {
   type WorkflowStep,
   type WorkflowView,
 } from "./app/workflow";
+import { isReviewFlowStep } from "./app/reviewFlow";
 import { AuthGateway } from "./components/AuthGateway";
 import { HeroPanel } from "./components/HeroPanel";
 import { IdentityWorkflow } from "./components/workflows/IdentityWorkflow";
@@ -1125,18 +1126,7 @@ export default function App() {
       return null;
     }
 
-    const reviewSteps = [
-      "WaitingExpertAssignment",
-      "ExpertAssigned",
-      "UnderExpertReview",
-      "ExpertRevisionRequested",
-      "ExpertApproved",
-      "PackageReady",
-      "UnderCommitteeReview",
-      "CommitteeRevisionRequested",
-    ];
-
-    if (!reviewSteps.includes(applicationStep)) {
+    if (!isReviewFlowStep(applicationStep)) {
       setBanner({
         tone: "neutral",
         title: "Inceleme akisina hazir degil",

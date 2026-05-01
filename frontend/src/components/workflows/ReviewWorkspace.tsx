@@ -1,6 +1,7 @@
 import type { ReviewGuidanceCard } from "../../app/reviewGuidance";
 import type { BusyAction } from "../../app/demoState";
-import type { ApplicationCurrentStep, ApplicationSummaryResponse } from "../../types";
+import { isReviewFlowStep } from "../../app/reviewFlow";
+import type { ApplicationSummaryResponse } from "../../types";
 import { ValidationSummary } from "../ValidationSummary";
 
 export interface ReviewRoleSessionView {
@@ -68,19 +69,8 @@ function roleStatus(role: ReviewRoleSessionView | null) {
   return role ? role.email : "Hazir degil";
 }
 
-const reviewFlowSteps: ApplicationCurrentStep[] = [
-  "WaitingExpertAssignment",
-  "ExpertAssigned",
-  "UnderExpertReview",
-  "ExpertRevisionRequested",
-  "ExpertApproved",
-  "PackageReady",
-  "UnderCommitteeReview",
-  "CommitteeRevisionRequested",
-];
-
 function applicationReadyForReview(application: ApplicationSummaryResponse | null) {
-  return application ? reviewFlowSteps.includes(application.currentStep) : false;
+  return isReviewFlowStep(application?.currentStep);
 }
 
 export function ReviewWorkspace({
