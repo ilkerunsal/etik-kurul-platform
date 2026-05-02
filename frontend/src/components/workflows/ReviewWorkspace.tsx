@@ -96,6 +96,10 @@ function shortId(value: string | null) {
   return value ? value.slice(0, 8) : "-";
 }
 
+function shortHash(value: string | null) {
+  return value ? `${value.slice(0, 12)}...` : "-";
+}
+
 export function ReviewWorkspace({
   agendaQueueCount,
   agendaStatus,
@@ -332,7 +336,9 @@ export function ReviewWorkspace({
               <div><span>Paket</span><strong>{shortId(finalDossier.reviewPackageId)}</strong></div>
               <div><span>Gundem</span><strong>{shortId(finalDossier.agendaItemId)}</strong></div>
               <div><span>Karar</span><strong>{finalDossier.committeeDecisionType ?? "-"}</strong></div>
-              <div><span>Uretim</span><strong>{formatDate(finalDossier.generatedAt)}</strong></div>
+              <div><span>Artifact</span><strong>{finalDossier.finalDossierVersionNo ? `v${finalDossier.finalDossierVersionNo}` : "Yok"}</strong></div>
+              <div><span>SHA256</span><strong>{shortHash(finalDossier.finalDossierSha256Hash)}</strong></div>
+              <div><span>Sabitlenme</span><strong>{finalDossier.finalDossierGeneratedAt ? formatDate(finalDossier.finalDossierGeneratedAt) : "-"}</strong></div>
             </div>
           ) : null}
         </div>
@@ -347,7 +353,7 @@ export function ReviewWorkspace({
           <div className="final-dossier-card__preview">
             <div className="message-preview__header">
               <span>HTML karar dosyasi</span>
-              <strong>{finalDossierDocumentFileName ?? "hazir"}</strong>
+              <strong>{finalDossier?.finalDossierFileName ?? finalDossierDocumentFileName ?? "hazir"}</strong>
             </div>
             <iframe
               title="Kurul karar dosyasi onizleme"

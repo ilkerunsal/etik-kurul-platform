@@ -968,6 +968,7 @@ export default function App() {
     const document = await fetchApplicationFinalDossierDocument(sessionToken, applicationId);
     setFinalDossierDocumentHtml(document.html);
     setFinalDossierDocumentFileName(document.fileName);
+    setFinalDossier(await fetchApplicationFinalDossier(sessionToken, applicationId));
     return document;
   }
 

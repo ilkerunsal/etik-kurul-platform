@@ -96,7 +96,20 @@ export async function fetchApplicationFinalDossierDocument(accessToken: string, 
     html: result.text,
     contentType: result.contentType,
     fileName: result.fileName ?? `etik-kurul-karar-dosyasi-${applicationId}.html`,
+    finalDossierDocumentId: result.headers.get("x-final-dossier-id"),
+    finalDossierVersionNo: parseNumberHeader(result.headers.get("x-final-dossier-version")),
+    finalDossierSha256Hash: result.headers.get("x-final-dossier-sha256"),
+    finalDossierGeneratedAt: result.headers.get("x-final-dossier-generated-at"),
   };
+}
+
+function parseNumberHeader(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function setApplicationEntryMode(

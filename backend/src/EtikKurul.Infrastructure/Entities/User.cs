@@ -33,5 +33,6 @@ public class User
     public ICollection<ApplicationCommitteeAgendaItem> AddedCommitteeAgendaItems { get; set; } = [];
     public ICollection<ApplicationCommitteeDecision> ApplicationCommitteeDecisions { get; set; } = [];
     public ICollection<ApplicationCommitteeRevisionResponse> ApplicationCommitteeRevisionResponses { get; set; } = [];
+    public ICollection<ApplicationFinalDossier> GeneratedFinalDossiers { get; set; } = [];
     public UserProfile? Profile { get; set; }
 }

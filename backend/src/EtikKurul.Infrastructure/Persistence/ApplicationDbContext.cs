@@ -26,6 +26,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ApplicationCommitteeAgendaItem> ApplicationCommitteeAgendaItems => Set<ApplicationCommitteeAgendaItem>();
     public DbSet<ApplicationCommitteeDecision> ApplicationCommitteeDecisions => Set<ApplicationCommitteeDecision>();
     public DbSet<ApplicationCommitteeRevisionResponse> ApplicationCommitteeRevisionResponses => Set<ApplicationCommitteeRevisionResponse>();
+    public DbSet<ApplicationFinalDossier> ApplicationFinalDossiers => Set<ApplicationFinalDossier>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -366,6 +367,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             builder.HasOne(x => x.Application).WithMany(x => x.CommitteeRevisionResponses).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne(x => x.CommitteeDecision).WithMany(x => x.RevisionResponses).HasForeignKey(x => x.CommitteeDecisionId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne(x => x.SubmittedByUser).WithMany(x => x.ApplicationCommitteeRevisionResponses).HasForeignKey(x => x.SubmittedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ApplicationFinalDossier>(builder =>
+        {
+            builder.ToTable("application_final_dossiers");
+            builder.HasKey(x => x.Id);
+            builder.Property(x => x.ApplicationId).HasColumnName("application_id").IsRequired();
+            builder.Property(x => x.CommitteeDecisionId).HasColumnName("committee_decision_id").IsRequired();
+            builder.Property(x => x.VersionNo).HasColumnName("version_no").IsRequired();
+            builder.Property(x => x.FileName).HasColumnName("file_name").HasMaxLength(512).IsRequired();
+            builder.Property(x => x.ContentType).HasColumnName("content_type").HasMaxLength(128).IsRequired();
+            builder.Property(x => x.Sha256Hash).HasColumnName("sha256_hash").HasMaxLength(64).IsRequired();
+            builder.Property(x => x.HtmlContent).HasColumnName("html_content").HasColumnType("text").IsRequired();
+            builder.Property(x => x.GeneratedByUserId).HasColumnName("generated_by_user_id").IsRequired();
+            builder.Property(x => x.GeneratedAt).HasColumnName("generated_at").IsRequired();
+            builder.HasIndex(x => new { x.ApplicationId, x.VersionNo }).IsUnique();
+            builder.HasIndex(x => x.Sha256Hash);
+            builder.HasOne(x => x.Application).WithMany(x => x.FinalDossiers).HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(x => x.CommitteeDecision).WithMany(x => x.FinalDossiers).HasForeignKey(x => x.CommitteeDecisionId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(x => x.GeneratedByUser).WithMany(x => x.GeneratedFinalDossiers).HasForeignKey(x => x.GeneratedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

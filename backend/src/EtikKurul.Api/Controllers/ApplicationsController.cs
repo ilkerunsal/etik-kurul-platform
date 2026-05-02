@@ -66,6 +66,11 @@ public class ApplicationsController(IApplicationService applicationService) : Co
             result.IsReady,
             result.DossierStatus,
             result.GeneratedAt,
+            result.FinalDossierDocumentId,
+            result.FinalDossierVersionNo,
+            result.FinalDossierSha256Hash,
+            result.FinalDossierGeneratedAt,
+            result.FinalDossierFileName,
             MapSummary(result.Application),
             result.ReviewPackageId,
             result.ReviewPackagePreparedAt,
@@ -104,6 +109,10 @@ public class ApplicationsController(IApplicationService applicationService) : Co
 
         var result = await applicationService.GetFinalDossierDocumentAsync(userId, id, cancellationToken);
         Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Final-Dossier-Id"] = result.FinalDossierDocumentId.ToString();
+        Response.Headers["X-Final-Dossier-Version"] = result.VersionNo.ToString();
+        Response.Headers["X-Final-Dossier-Sha256"] = result.Sha256Hash;
+        Response.Headers["X-Final-Dossier-Generated-At"] = result.GeneratedAt.ToString("O");
         return File(Encoding.UTF8.GetBytes(result.Html), result.ContentType, result.FileName);
     }
 

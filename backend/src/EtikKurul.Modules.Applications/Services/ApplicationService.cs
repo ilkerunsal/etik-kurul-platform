@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using EtikKurul.Infrastructure.Entities;
 using EtikKurul.Infrastructure.Enums;
 using EtikKurul.Infrastructure.Exceptions;
@@ -73,6 +75,8 @@ public class ApplicationService(
             .Include(x => x.CommitteeAgendaItems)
             .Include(x => x.CommitteeDecisions)
             .Include(x => x.CommitteeRevisionResponses)
+            .Include(x => x.FinalDossiers)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(
                 x => x.Id == applicationId && x.ApplicantUserId == userId,
                 cancellationToken)
@@ -88,6 +92,12 @@ public class ApplicationService(
             .Where(x => x.DecisionType is ApplicationCommitteeDecisionType.Approved or ApplicationCommitteeDecisionType.Rejected)
             .OrderByDescending(x => x.CreatedAt)
             .FirstOrDefault();
+        var latestFinalDossier = finalDecision is null
+            ? null
+            : application.FinalDossiers
+                .Where(x => x.CommitteeDecisionId == finalDecision.Id)
+                .OrderByDescending(x => x.VersionNo)
+                .FirstOrDefault();
 
         var isReady = finalDecision is not null &&
             application.CurrentStep is ApplicationCurrentStep.Approved or ApplicationCurrentStep.Rejected;
@@ -101,6 +111,11 @@ public class ApplicationService(
             isReady,
             GetDossierStatus(application, latestPackage, latestAgendaItem, finalDecision),
             DateTimeOffset.UtcNow,
+            latestFinalDossier?.Id,
+            latestFinalDossier?.VersionNo,
+            latestFinalDossier?.Sha256Hash,
+            latestFinalDossier?.GeneratedAt,
+            latestFinalDossier?.FileName,
             MapSummary(application),
             latestPackage?.Id,
             latestPackage?.CreatedAt,
@@ -134,12 +149,47 @@ public class ApplicationService(
             throw new ConflictAppException("Final dossier document can only be generated after a final committee decision.");
         }
 
-        var fileName = $"etik-kurul-karar-dosyasi-{dossier.ApplicationId:N}.html";
-        return new ApplicationFinalDossierDocumentResult(
-            dossier.ApplicationId,
-            fileName,
-            "text/html; charset=utf-8",
-            BuildFinalDossierHtml(dossier));
+        if (dossier.CommitteeDecisionId is null)
+        {
+            throw new ConflictAppException("Final dossier document requires a final committee decision record.");
+        }
+
+        var existingFinalDossier = await dbContext.ApplicationFinalDossiers
+            .AsNoTracking()
+            .Where(x =>
+                x.ApplicationId == applicationId &&
+                x.CommitteeDecisionId == dossier.CommitteeDecisionId.Value)
+            .OrderByDescending(x => x.VersionNo)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existingFinalDossier is not null)
+        {
+            return MapFinalDossierDocument(existingFinalDossier);
+        }
+
+        var latestVersionNo = await dbContext.ApplicationFinalDossiers
+            .Where(x => x.ApplicationId == applicationId)
+            .MaxAsync(x => (int?)x.VersionNo, cancellationToken) ?? 0;
+        var generatedAt = DateTimeOffset.UtcNow;
+        var html = BuildFinalDossierHtml(dossier, generatedAt);
+        var finalDossier = new ApplicationFinalDossier
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = dossier.ApplicationId,
+            CommitteeDecisionId = dossier.CommitteeDecisionId.Value,
+            VersionNo = latestVersionNo + 1,
+            FileName = BuildFinalDossierFileName(dossier.ApplicationId),
+            ContentType = "text/html; charset=utf-8",
+            Sha256Hash = ComputeSha256(html),
+            HtmlContent = html,
+            GeneratedByUserId = userId,
+            GeneratedAt = generatedAt,
+        };
+
+        dbContext.ApplicationFinalDossiers.Add(finalDossier);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return MapFinalDossierDocument(finalDossier);
     }
 
     public async Task<ApplicationSummaryResult> CreateAsync(CreateApplicationCommand command, CancellationToken cancellationToken)
@@ -734,7 +784,7 @@ public class ApplicationService(
         return sections;
     }
 
-    private static string BuildFinalDossierHtml(ApplicationFinalDossierResult dossier)
+    private static string BuildFinalDossierHtml(ApplicationFinalDossierResult dossier, DateTimeOffset generatedAt)
     {
         var application = dossier.Application;
         var title = string.IsNullOrWhiteSpace(application.Title)
@@ -791,7 +841,7 @@ public class ApplicationService(
                     <tr><th>Durum</th><td>{{Html(application.Status.ToString())}} / {{Html(application.CurrentStep.ToString())}}</td></tr>
                     <tr><th>Baslik</th><td>{{Html(title)}}</td></tr>
                     <tr><th>Ozet</th><td>{{Html(summary)}}</td></tr>
-                    <tr><th>Olusturma Zamani</th><td>{{Html(FormatDate(dossier.GeneratedAt))}}</td></tr>
+                    <tr><th>Olusturma Zamani</th><td>{{Html(FormatDate(generatedAt))}}</td></tr>
                   </table>
                 </section>
 
@@ -842,6 +892,24 @@ public class ApplicationService(
 
     private static string BuildSectionList(IReadOnlyList<string> sections)
         => string.Join(Environment.NewLine, sections.Select(section => $"<li>{Html(section)}</li>"));
+
+    private static ApplicationFinalDossierDocumentResult MapFinalDossierDocument(ApplicationFinalDossier finalDossier)
+        => new(
+            finalDossier.Id,
+            finalDossier.ApplicationId,
+            finalDossier.CommitteeDecisionId,
+            finalDossier.VersionNo,
+            finalDossier.FileName,
+            finalDossier.ContentType,
+            finalDossier.Sha256Hash,
+            finalDossier.GeneratedAt,
+            finalDossier.HtmlContent);
+
+    private static string BuildFinalDossierFileName(Guid applicationId)
+        => $"etik-kurul-karar-dosyasi-{applicationId:N}.html";
+
+    private static string ComputeSha256(string value)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private static string FormatDate(DateTimeOffset value)
         => value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");

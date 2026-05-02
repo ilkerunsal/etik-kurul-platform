@@ -348,6 +348,7 @@ try {
     $finalDossierDocument = Invoke-WebRequest -UseBasicParsing -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)/final-dossier/document" -Headers @{
         Authorization = "Bearer $($login.accessToken)"
     }
+    $finalDossierAfterDocument = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)/final-dossier" -BearerToken $login.accessToken
     $applications = Invoke-Json -Method Get -Uri "$BaseUrl/applications" -BearerToken $login.accessToken
 
     [pscustomobject]@{
@@ -417,8 +418,12 @@ try {
         finalDossierReady = if ($finalDossier) { $finalDossier.isReady } else { $null }
         finalDossierSectionCount = if ($finalDossier) { @($finalDossier.includedSections).Count } else { 0 }
         finalDossierDecisionType = if ($finalDossier) { $finalDossier.committeeDecisionType } else { $null }
+        finalDossierArtifactId = if ($finalDossierAfterDocument) { $finalDossierAfterDocument.finalDossierDocumentId } else { $null }
+        finalDossierArtifactVersion = if ($finalDossierAfterDocument) { $finalDossierAfterDocument.finalDossierVersionNo } else { $null }
+        finalDossierArtifactHash = if ($finalDossierAfterDocument) { $finalDossierAfterDocument.finalDossierSha256Hash } else { $null }
         finalDossierDocumentStatus = if ($finalDossierDocument) { [int]$finalDossierDocument.StatusCode } else { $null }
         finalDossierDocumentContentType = if ($finalDossierDocument) { $finalDossierDocument.Headers["Content-Type"] } else { $null }
+        finalDossierDocumentHash = if ($finalDossierDocument) { $finalDossierDocument.Headers["X-Final-Dossier-Sha256"] } else { $null }
         finalDossierDocumentLength = if ($finalDossierDocument) { $finalDossierDocument.Content.Length } else { 0 }
         listedApplicationCount = @($applications).Count
         listedFirstApplicationId = if (@($applications).Count -gt 0) { @($applications)[0].applicationId } else { $null }

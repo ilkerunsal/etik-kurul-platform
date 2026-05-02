@@ -34,4 +34,5 @@ public class Application
     public ICollection<ApplicationCommitteeAgendaItem> CommitteeAgendaItems { get; set; } = [];
     public ICollection<ApplicationCommitteeDecision> CommitteeDecisions { get; set; } = [];
     public ICollection<ApplicationCommitteeRevisionResponse> CommitteeRevisionResponses { get; set; } = [];
+    public ICollection<ApplicationFinalDossier> FinalDossiers { get; set; } = [];
 }

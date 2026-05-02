@@ -15,4 +15,5 @@ public class ApplicationCommitteeDecision
     public ApplicationCommitteeAgendaItem AgendaItem { get; set; } = null!;
     public User DecidedByUser { get; set; } = null!;
     public ICollection<ApplicationCommitteeRevisionResponse> RevisionResponses { get; set; } = [];
+    public ICollection<ApplicationFinalDossier> FinalDossiers { get; set; } = [];
 }

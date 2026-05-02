@@ -65,6 +65,7 @@ export async function requestText(path: string, init?: RequestInit) {
     text: await response.text(),
     contentType: response.headers.get("content-type") ?? "text/plain",
     fileName: getFileName(response.headers.get("content-disposition")),
+    headers: response.headers,
   };
 }
 

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EtikKurul.Api.Contracts.Applications;
@@ -920,15 +922,51 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.Equal(committeeDecisionPayload.DecisionId, finalDossierPayload.CommitteeDecisionId);
         Assert.Equal(ApplicationCommitteeDecisionType.Approved, finalDossierPayload.CommitteeDecisionType);
         Assert.Contains("Kurul karar kayitlari", finalDossierPayload.IncludedSections);
+        Assert.Null(finalDossierPayload.FinalDossierDocumentId);
 
         var finalDossierDocumentResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}/final-dossier/document");
         finalDossierDocumentResponse.EnsureSuccessStatusCode();
         Assert.Equal("text/html", finalDossierDocumentResponse.Content.Headers.ContentType?.MediaType);
+        Assert.True(finalDossierDocumentResponse.Headers.TryGetValues("X-Final-Dossier-Id", out var finalDossierDocumentIdHeaders));
+        Assert.True(finalDossierDocumentResponse.Headers.TryGetValues("X-Final-Dossier-Version", out var finalDossierVersionHeaders));
+        Assert.True(finalDossierDocumentResponse.Headers.TryGetValues("X-Final-Dossier-Sha256", out var finalDossierHashHeaders));
+        Assert.Equal("1", Assert.Single(finalDossierVersionHeaders));
+        var finalDossierDocumentId = Guid.Parse(Assert.Single(finalDossierDocumentIdHeaders));
+        var finalDossierHash = Assert.Single(finalDossierHashHeaders);
         var finalDossierDocumentHtml = await finalDossierDocumentResponse.Content.ReadAsStringAsync();
+        Assert.Equal(64, finalDossierHash.Length);
+        Assert.Equal(ComputeSha256(finalDossierDocumentHtml), finalDossierHash);
         Assert.Contains("Kurul Karar Dosyasi", finalDossierDocumentHtml);
         Assert.Contains("Uzman Kuyruk Testi", finalDossierDocumentHtml);
         Assert.Contains("Committee integration approval.", finalDossierDocumentHtml);
         Assert.DoesNotContain(applicantRegisterRequest.Tckn, finalDossierDocumentHtml);
+
+        var repeatedFinalDossierDocumentResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}/final-dossier/document");
+        repeatedFinalDossierDocumentResponse.EnsureSuccessStatusCode();
+        Assert.True(repeatedFinalDossierDocumentResponse.Headers.TryGetValues("X-Final-Dossier-Id", out var repeatedFinalDossierDocumentIdHeaders));
+        Assert.True(repeatedFinalDossierDocumentResponse.Headers.TryGetValues("X-Final-Dossier-Sha256", out var repeatedFinalDossierHashHeaders));
+        Assert.Equal(finalDossierDocumentId.ToString(), Assert.Single(repeatedFinalDossierDocumentIdHeaders));
+        Assert.Equal(finalDossierHash, Assert.Single(repeatedFinalDossierHashHeaders));
+        var repeatedFinalDossierDocumentHtml = await repeatedFinalDossierDocumentResponse.Content.ReadAsStringAsync();
+        Assert.Equal(finalDossierDocumentHtml, repeatedFinalDossierDocumentHtml);
+
+        var finalDossierAfterDocumentResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}/final-dossier");
+        finalDossierAfterDocumentResponse.EnsureSuccessStatusCode();
+        var finalDossierAfterDocumentPayload = await ReadJsonAsync<ApplicationFinalDossierResponse>(finalDossierAfterDocumentResponse);
+        Assert.NotNull(finalDossierAfterDocumentPayload);
+        Assert.Equal(finalDossierDocumentId, finalDossierAfterDocumentPayload!.FinalDossierDocumentId);
+        Assert.Equal(1, finalDossierAfterDocumentPayload.FinalDossierVersionNo);
+        Assert.Equal(finalDossierHash, finalDossierAfterDocumentPayload.FinalDossierSha256Hash);
+
+        using var finalDossierScope = configuredFactory.Services.CreateScope();
+        var finalDossierDb = finalDossierScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var storedFinalDossier = finalDossierDb.ApplicationFinalDossiers.Single(x => x.ApplicationId == createApplicationPayload.ApplicationId);
+        Assert.Equal(finalDossierDocumentId, storedFinalDossier.Id);
+        Assert.Equal(committeeDecisionPayload.DecisionId, storedFinalDossier.CommitteeDecisionId);
+        Assert.Equal(1, storedFinalDossier.VersionNo);
+        Assert.Equal(finalDossierHash, storedFinalDossier.Sha256Hash);
+        Assert.Equal(finalDossierDocumentHtml, storedFinalDossier.HtmlContent);
+        Assert.Equal(applicantRegisterPayload.UserId, storedFinalDossier.GeneratedByUserId);
     }
 
     [Fact]
@@ -1116,4 +1154,7 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
 
     private static Task<T?> ReadJsonAsync<T>(HttpResponseMessage response)
         => response.Content.ReadFromJsonAsync<T>(JsonOptions);
+
+    private static string ComputeSha256(string value)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 }

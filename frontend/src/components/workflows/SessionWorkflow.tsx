@@ -394,7 +394,7 @@ export function SessionWorkflow({
                 <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
                 <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
                 <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
-                <div><span>Karar dosyasi</span><strong>{finalDossier?.dossierStatus ?? "Okunmadi"}</strong></div>
+                <div><span>Karar dosyasi</span><strong>{finalDossier?.finalDossierVersionNo ? `${finalDossier.dossierStatus} / v${finalDossier.finalDossierVersionNo}` : finalDossier?.dossierStatus ?? "Okunmadi"}</strong></div>
               </div>
             ) : (
               <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yanitlari, uzman onayi, paketleme, kurul gundemi ve kurul onayini calistirir.</p>

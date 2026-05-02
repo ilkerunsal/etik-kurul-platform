@@ -189,6 +189,11 @@ export interface ApplicationFinalDossierResponse {
   isReady: boolean;
   dossierStatus: ApplicationFinalDossierStatus;
   generatedAt: string;
+  finalDossierDocumentId: string | null;
+  finalDossierVersionNo: number | null;
+  finalDossierSha256Hash: string | null;
+  finalDossierGeneratedAt: string | null;
+  finalDossierFileName: string | null;
   application: ApplicationSummaryResponse;
   reviewPackageId: string | null;
   reviewPackagePreparedAt: string | null;
