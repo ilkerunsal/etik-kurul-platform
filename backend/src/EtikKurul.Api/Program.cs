@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using EtikKurul.Api.Configuration;
 using EtikKurul.Api.Health;
+using EtikKurul.Api.Security;
 using EtikKurul.Infrastructure;
 using EtikKurul.Infrastructure.Exceptions;
 using EtikKurul.Infrastructure.Persistence;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +39,10 @@ var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<Jw
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
 
 builder.Services.AddProblemDetails();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
 builder.Services
     .AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("API process is running."), tags: ["live"])
@@ -92,6 +98,7 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddScoped<IAuthorizationHandler, CanOpenApplicationAuthorizationHandler>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddEtikKurulRateLimiting(builder.Configuration);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddIdentityVerificationModule();
@@ -101,6 +108,11 @@ builder.Services.AddApplicationsModule();
 var app = builder.Build();
 
 await ApplicationDbInitializer.InitializeAsync(app.Services, app.Lifetime.ApplicationStopping);
+
+if (builder.Configuration.GetValue("Hosting:EnableForwardedHeaders", false))
+{
+    app.UseForwardedHeaders();
+}
 
 app.UseExceptionHandler(exceptionHandlerApp =>
 {
@@ -139,6 +151,9 @@ if (builder.Configuration.GetValue("Hosting:EnableHttpsRedirection", !app.Enviro
     app.UseHttpsRedirection();
 }
 
+app.UseEtikKurulSecurityHeaders();
+app.UseRateLimiter();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live", new HealthCheckOptions

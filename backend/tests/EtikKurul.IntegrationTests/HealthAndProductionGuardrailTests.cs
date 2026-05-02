@@ -1,5 +1,7 @@
+using System.Net;
 using System.Net.Http.Json;
 using EtikKurul.Api.Configuration;
+using EtikKurul.Api.Contracts.Auth;
 using EtikKurul.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -37,6 +39,26 @@ public class HealthAndProductionGuardrailTests : IClassFixture<TestWebApplicatio
         Assert.NotNull(readyPayload);
         Assert.Equal("Healthy", readyPayload!.Status);
         Assert.Contains(readyPayload.Checks, check => check.Name == "database" && check.Status == "Healthy");
+
+        Assert.Equal("nosniff", liveResponse.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", liveResponse.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("frame-ancestors 'none'", liveResponse.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
+    [Fact]
+    public async Task AuthEndpoints_ReturnTooManyRequests_WhenConfiguredLimitIsExceeded()
+    {
+        using var rateLimitedFactory = new TestWebApplicationFactory();
+        var client = rateLimitedFactory.CreateClient();
+
+        for (var index = 0; index < 20; index++)
+        {
+            var response = await client.PostAsJsonAsync("/auth/register", BuildRegisterRequest((90000000000 + index).ToString()));
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        var limitedResponse = await client.PostAsJsonAsync("/auth/register", BuildRegisterRequest("90000000020"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, limitedResponse.StatusCode);
     }
 
     [Fact]
@@ -83,6 +105,20 @@ public class HealthAndProductionGuardrailTests : IClassFixture<TestWebApplicatio
     private sealed record HealthPayload(string Status, HealthCheckPayload[] Checks);
 
     private sealed record HealthCheckPayload(string Name, string Status);
+
+    private static RegisterRequest BuildRegisterRequest(string tckn)
+    {
+        return new RegisterRequest
+        {
+            FirstName = "Grace",
+            LastName = "Hopper",
+            Tckn = tckn,
+            BirthDate = new DateOnly(1991, 2, 3),
+            Email = $"{tckn}@example.com",
+            Phone = $"+90555{tckn[^7..]}",
+            Password = "Password1",
+        };
+    }
 
     private sealed class TestHostEnvironment : IHostEnvironment
     {

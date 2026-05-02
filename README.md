@@ -27,6 +27,8 @@ Varsayilan adresler:
 
 - Production modunda veya `REQUIRE_PRODUCTION_SECRETS=true` iken API default JWT/encryption secret'lari, default PostgreSQL parolasi ve dev mock endpointleri ile acilmaz.
 - Docker healthcheck API icin `/health/ready`, frontend icin `/health` kullanir; frontend API hazir olmadan baslatilmaz.
+- API varsayilan security header'larini doner ve auth endpointleri icin fixed-window rate limiting uygular.
+- Frontend Nginx security header'lari, gzip ve uzun omurlu statik asset cache ayarlariyla gelir.
 - Canli ortamda `.env.example` degerlerini dogrudan kullanmayin; `POSTGRES_PASSWORD`, `ENCRYPTION_BASE64_KEY` ve `JWT_SIGNING_KEY` degerlerini secret store veya deployment secret mekanizmasindan verin.
 
 ## Smoke Test

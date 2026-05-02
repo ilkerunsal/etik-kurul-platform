@@ -15,15 +15,19 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"etik-kurul-tests-{Guid.NewGuid():N}";
     private readonly int? _minimumProfileCompletionPercent;
+    private readonly IReadOnlyDictionary<string, string?> _extraConfiguration;
 
     public TestWebApplicationFactory()
         : this(null)
     {
     }
 
-    internal TestWebApplicationFactory(int? minimumProfileCompletionPercent)
+    internal TestWebApplicationFactory(
+        int? minimumProfileCompletionPercent,
+        IReadOnlyDictionary<string, string?>? extraConfiguration = null)
     {
         _minimumProfileCompletionPercent = minimumProfileCompletionPercent;
+        _extraConfiguration = extraConfiguration ?? new Dictionary<string, string?>();
         Environment.SetEnvironmentVariable("Persistence__Provider", "InMemory");
         Environment.SetEnvironmentVariable("Persistence__InMemoryDatabaseName", _databaseName);
         Environment.SetEnvironmentVariable(
@@ -43,12 +47,19 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, configBuilder) =>
         {
-            configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+            var configuration = new Dictionary<string, string?>
             {
                 ["Persistence:Provider"] = "InMemory",
                 ["Persistence:InMemoryDatabaseName"] = _databaseName,
                 ["ApplicationAccess:MinimumProfileCompletionPercent"] = _minimumProfileCompletionPercent?.ToString(),
-            });
+            };
+
+            foreach (var item in _extraConfiguration)
+            {
+                configuration[item.Key] = item.Value;
+            }
+
+            configBuilder.AddInMemoryCollection(configuration);
         });
         builder.ConfigureLogging(logging =>
         {

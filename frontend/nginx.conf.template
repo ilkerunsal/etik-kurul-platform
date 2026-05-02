@@ -5,6 +5,15 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" always;
+    add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
+
     location /api/ {
         proxy_pass ${NGINX_BACKEND_UPSTREAM}/;
         proxy_http_version 1.1;
@@ -13,8 +22,13 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location ~* \.(?:css|js|woff|woff2|png|jpg|jpeg|gif|svg|ico)$ {
+        expires 1y;
+        try_files $uri =404;
+    }
+
     location /health {
-        add_header Content-Type application/json;
+        default_type application/json;
         return 200 '{"status":"ok"}';
     }
 
