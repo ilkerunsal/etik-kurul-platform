@@ -33,9 +33,17 @@ services:
       VerificationCodes__Length: ${VERIFICATION_CODE_LENGTH:-6}
       VerificationCodes__ExpiresInMinutes: ${VERIFICATION_CODE_EXPIRES_IN_MINUTES:-10}
       ApplicationAccess__MinimumProfileCompletionPercent: ${APPLICATION_ACCESS_MIN_PROFILE_COMPLETION_PERCENT:-}
+      DevelopmentTools__EnableMockMessageEndpoints: ${ENABLE_DEV_TOOLS:-true}
       Hosting__EnableHttpsRedirection: "false"
+      Hosting__RequireProductionSecrets: ${REQUIRE_PRODUCTION_SECRETS:-false}
     ports:
       - "${API_PORT:-8086}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   frontend:
     build:
@@ -44,11 +52,17 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     environment:
       NGINX_BACKEND_UPSTREAM: http://api:8080
     ports:
       - "${FRONTEND_PORT:-3006}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   postgres-data:

@@ -19,8 +19,15 @@ Varsayilan adresler:
 
 - Frontend: `http://localhost:3006`
 - Backend API: `http://localhost:8086`
-- Backend health: `http://localhost:8086/health`
+- Backend liveness: `http://localhost:8086/health/live`
+- Backend readiness: `http://localhost:8086/health/ready`
 - PostgreSQL: `localhost:5436`
+
+## Production Guardrails
+
+- Production modunda veya `REQUIRE_PRODUCTION_SECRETS=true` iken API default JWT/encryption secret'lari, default PostgreSQL parolasi ve dev mock endpointleri ile acilmaz.
+- Docker healthcheck API icin `/health/ready`, frontend icin `/health` kullanir; frontend API hazir olmadan baslatilmaz.
+- Canli ortamda `.env.example` degerlerini dogrudan kullanmayin; `POSTGRES_PASSWORD`, `ENCRYPTION_BASE64_KEY` ve `JWT_SIGNING_KEY` degerlerini secret store veya deployment secret mekanizmasindan verin.
 
 ## Smoke Test
 
