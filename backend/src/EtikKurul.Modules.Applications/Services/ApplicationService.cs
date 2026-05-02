@@ -57,6 +57,71 @@ public class ApplicationService(
         return MapSummary(application);
     }
 
+    public async Task<ApplicationFinalDossierResult> GetFinalDossierAsync(
+        Guid userId,
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var application = await dbContext.Applications
+            .AsNoTracking()
+            .Include(x => x.Forms)
+            .Include(x => x.Documents)
+            .Include(x => x.Checklists)
+            .Include(x => x.ExpertReviewDecisions)
+            .Include(x => x.RevisionResponses)
+            .Include(x => x.ReviewPackages)
+            .Include(x => x.CommitteeAgendaItems)
+            .Include(x => x.CommitteeDecisions)
+            .Include(x => x.CommitteeRevisionResponses)
+            .SingleOrDefaultAsync(
+                x => x.Id == applicationId && x.ApplicantUserId == userId,
+                cancellationToken)
+            ?? throw new NotFoundAppException("Application was not found.");
+
+        var latestPackage = application.ReviewPackages
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
+        var latestAgendaItem = application.CommitteeAgendaItems
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
+        var finalDecision = application.CommitteeDecisions
+            .Where(x => x.DecisionType is ApplicationCommitteeDecisionType.Approved or ApplicationCommitteeDecisionType.Rejected)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
+
+        var isReady = finalDecision is not null &&
+            application.CurrentStep is ApplicationCurrentStep.Approved or ApplicationCurrentStep.Rejected;
+        var includedSections = BuildDossierSections(
+            application,
+            latestPackage is not null,
+            latestAgendaItem is not null);
+
+        return new ApplicationFinalDossierResult(
+            application.Id,
+            isReady,
+            GetDossierStatus(application, latestPackage, latestAgendaItem, finalDecision),
+            DateTimeOffset.UtcNow,
+            MapSummary(application),
+            latestPackage?.Id,
+            latestPackage?.CreatedAt,
+            latestPackage?.Note,
+            latestAgendaItem?.Id,
+            latestAgendaItem?.CreatedAt,
+            latestAgendaItem?.CommitteeId,
+            latestAgendaItem?.Note,
+            finalDecision?.Id,
+            finalDecision?.DecisionType,
+            finalDecision?.CreatedAt,
+            finalDecision?.Note,
+            application.Forms.Count,
+            application.Documents.Count,
+            application.Checklists.Count,
+            application.ExpertReviewDecisions.Count,
+            application.RevisionResponses.Count,
+            application.CommitteeRevisionResponses.Count,
+            includedSections);
+    }
+
     public async Task<ApplicationSummaryResult> CreateAsync(CreateApplicationCommand command, CancellationToken cancellationToken)
     {
         var user = await dbContext.Users
@@ -570,6 +635,83 @@ public class ApplicationService(
         {
             throw new ValidationAppException("Only draft applications can be updated in this increment.");
         }
+    }
+
+    private static string GetDossierStatus(
+        Application application,
+        ApplicationReviewPackage? latestPackage,
+        ApplicationCommitteeAgendaItem? latestAgendaItem,
+        ApplicationCommitteeDecision? finalDecision)
+    {
+        if (finalDecision is not null &&
+            application.CurrentStep is ApplicationCurrentStep.Approved or ApplicationCurrentStep.Rejected)
+        {
+            return "final_ready";
+        }
+
+        if (latestAgendaItem is not null)
+        {
+            return "agenda_ready";
+        }
+
+        if (latestPackage is not null)
+        {
+            return "package_ready";
+        }
+
+        return application.CurrentStep == ApplicationCurrentStep.ExpertApproved
+            ? "package_pending"
+            : "not_ready";
+    }
+
+    private static IReadOnlyList<string> BuildDossierSections(
+        Application application,
+        bool hasPackage,
+        bool hasAgendaItem)
+    {
+        var sections = new List<string>
+        {
+            "Basvuru ozeti",
+            "Sistem dogrulama kontrol listesi",
+        };
+
+        if (application.Forms.Count > 0)
+        {
+            sections.Add("Basvuru formlari");
+        }
+
+        if (application.Documents.Count > 0)
+        {
+            sections.Add("Yuklenen dokuman meta verileri");
+        }
+
+        if (application.ExpertReviewDecisions.Count > 0)
+        {
+            sections.Add("Uzman inceleme karar kayitlari");
+        }
+
+        if (application.RevisionResponses.Count > 0 ||
+            application.CommitteeRevisionResponses.Count > 0)
+        {
+            sections.Add("Arastirmaci revizyon yanitlari");
+        }
+
+        if (hasPackage)
+        {
+            sections.Add("Sekretarya kurul dosyasi paketi");
+        }
+
+        if (hasAgendaItem)
+        {
+            sections.Add("Kurul gundem kaydi");
+        }
+
+        if (application.CommitteeDecisions.Count > 0)
+        {
+            sections.Add("Kurul karar kayitlari");
+        }
+
+        return sections;
     }
 
     private static ApplicationSummaryResult MapSummary(Application application)

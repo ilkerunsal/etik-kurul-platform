@@ -1,7 +1,8 @@
 import type { ReviewGuidanceCard } from "../../app/reviewGuidance";
 import type { BusyAction } from "../../app/demoState";
+import { formatDate } from "../../app/formatters";
 import { isReviewFlowStep } from "../../app/reviewFlow";
-import type { ApplicationSummaryResponse } from "../../types";
+import type { ApplicationFinalDossierResponse, ApplicationSummaryResponse } from "../../types";
 import { ValidationSummary } from "../ValidationSummary";
 
 export interface ReviewRoleSessionView {
@@ -33,6 +34,7 @@ interface ReviewWorkspaceProps {
   committeeRevisionStatus: number | null;
   currentApplication: ApplicationSummaryResponse | null;
   decisionItems: string[];
+  finalDossier: ApplicationFinalDossierResponse | null;
   expertAssignmentStatus: number | null;
   expertDecisionStatus: number | null;
   expertQueueCount: number | null;
@@ -50,6 +52,7 @@ interface ReviewWorkspaceProps {
   onApproveExpert: () => void;
   onAssignExpert: () => void;
   onFetchAgendaQueue: () => void;
+  onFetchFinalDossier: () => void;
   onFetchExpertQueue: () => void;
   onFetchPackageQueue: () => void;
   onPreparePackage: () => void;
@@ -73,6 +76,22 @@ function applicationReadyForReview(application: ApplicationSummaryResponse | nul
   return isReviewFlowStep(application?.currentStep);
 }
 
+function formatDossierStatus(status: ApplicationFinalDossierResponse["dossierStatus"]) {
+  const labels: Record<ApplicationFinalDossierResponse["dossierStatus"], string> = {
+    not_ready: "Paket bekleniyor",
+    package_pending: "Paket hazirlanacak",
+    package_ready: "Kurul paketi hazir",
+    agenda_ready: "Kurul gundeminde",
+    final_ready: "Karar dosyasi hazir",
+  };
+
+  return labels[status];
+}
+
+function shortId(value: string | null) {
+  return value ? value.slice(0, 8) : "-";
+}
+
 export function ReviewWorkspace({
   agendaQueueCount,
   agendaStatus,
@@ -82,6 +101,7 @@ export function ReviewWorkspace({
   committeeRevisionStatus,
   currentApplication,
   decisionItems,
+  finalDossier,
   expertAssignmentStatus,
   expertDecisionStatus,
   expertQueueCount,
@@ -99,6 +119,7 @@ export function ReviewWorkspace({
   onApproveExpert,
   onAssignExpert,
   onFetchAgendaQueue,
+  onFetchFinalDossier,
   onFetchExpertQueue,
   onFetchPackageQueue,
   onPreparePackage,
@@ -127,13 +148,18 @@ export function ReviewWorkspace({
   const canCommitteeRevision = canUseSecretariat && currentStep === "UnderCommitteeReview" && agendaStatus === 200 && committeeRevisionStatus !== 200;
   const canCommitteeResponse = reviewReady && currentStep === "CommitteeRevisionRequested" && committeeRevisionStatus === 200 && committeeRevisionResponseStatus !== 200 && !busy;
   const canCommitteeApprove = canUseSecretariat && currentStep === "UnderCommitteeReview" && committeeRevisionResponseStatus === 200 && committeeDecisionStatus !== 200;
-  const finalDossierReady = committeeDecisionStatus === 200 || currentStep === "Approved";
-  const finalDossierPackaged = finalDossierReady || packageStatus === 200 || currentStep === "PackageReady" || currentStep === "UnderCommitteeReview";
-  const finalDossierStatus = finalDossierReady
-    ? "Karar dosyasi hazir"
-    : finalDossierPackaged
-      ? "Kurul paketi hazir"
-      : "Paket bekleniyor";
+  const dossierBusy = busyAction === "fetch-final-dossier";
+  const finalDossierReady = finalDossier?.isReady ?? (committeeDecisionStatus === 200 || currentStep === "Approved" || currentStep === "Rejected");
+  const finalDossierPackaged = finalDossier
+    ? finalDossier.dossierStatus !== "not_ready" && finalDossier.dossierStatus !== "package_pending"
+    : finalDossierReady || packageStatus === 200 || currentStep === "PackageReady" || currentStep === "UnderCommitteeReview";
+  const finalDossierStatus = finalDossier
+    ? formatDossierStatus(finalDossier.dossierStatus)
+    : finalDossierReady
+      ? "Karar dosyasi hazir"
+      : finalDossierPackaged
+        ? "Kurul paketi hazir"
+        : "Paket bekleniyor";
 
   return (
     <div className="review-workspace">
@@ -260,13 +286,38 @@ export function ReviewWorkspace({
         <div className="final-dossier-card__status">
           <strong>{finalDossierStatus}</strong>
           <small>
-            {finalDossierReady
+            {finalDossier
+              ? `${finalDossier.formCount} form, ${finalDossier.documentCount} dokuman, ${finalDossier.includedSections.length} bolum.`
+              : finalDossierReady
               ? "Approved karar kaydi ile son dosya kapatildi."
               : finalDossierPackaged
                 ? "Dosya kurul gundemi ve karar adimini bekliyor."
                 : "Uzman onayi sonrasi paket hazirlanacak."}
           </small>
+          <button
+            type="button"
+            className="button button--ghost"
+            disabled={!currentApplication || dossierBusy}
+            onClick={onFetchFinalDossier}
+          >
+            {dossierBusy ? "Dosya okunuyor" : "Dosya ozeti getir"}
+          </button>
+          {finalDossier ? (
+            <div className="final-dossier-card__facts">
+              <div><span>Paket</span><strong>{shortId(finalDossier.reviewPackageId)}</strong></div>
+              <div><span>Gundem</span><strong>{shortId(finalDossier.agendaItemId)}</strong></div>
+              <div><span>Karar</span><strong>{finalDossier.committeeDecisionType ?? "-"}</strong></div>
+              <div><span>Uretim</span><strong>{formatDate(finalDossier.generatedAt)}</strong></div>
+            </div>
+          ) : null}
         </div>
+        {finalDossier ? (
+          <div className="final-dossier-card__sections" aria-label="Karar dosyasindaki bolumler">
+            {finalDossier.includedSections.slice(0, 6).map((section) => (
+              <span key={section}>{section}</span>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <div className="application-stage-grid" aria-label="Uzman ve kurul adimlari">

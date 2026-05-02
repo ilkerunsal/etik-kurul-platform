@@ -282,6 +282,7 @@ try {
     $submittedApplication = $null
     $applications = @()
     $applicationDetail = $null
+    $finalDossier = $null
 
     if ($validation.isValid) {
         $submittedApplication = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/submit" -BearerToken $login.accessToken -Body @{}
@@ -342,6 +343,7 @@ try {
     }
 
     $applicationDetail = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)" -BearerToken $login.accessToken
+    $finalDossier = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)/final-dossier" -BearerToken $login.accessToken
     $applications = Invoke-Json -Method Get -Uri "$BaseUrl/applications" -BearerToken $login.accessToken
 
     [pscustomobject]@{
@@ -407,6 +409,10 @@ try {
         committeeRevisionResponseStep = if ($committeeRevisionResponse) { $committeeRevisionResponse.application.currentStep } else { $null }
         committeeDecisionType = if ($committeeDecision) { $committeeDecision.decisionType } else { $null }
         committeeDecisionStep = if ($committeeDecision) { $committeeDecision.application.currentStep } else { $null }
+        finalDossierStatus = if ($finalDossier) { $finalDossier.dossierStatus } else { $null }
+        finalDossierReady = if ($finalDossier) { $finalDossier.isReady } else { $null }
+        finalDossierSectionCount = if ($finalDossier) { @($finalDossier.includedSections).Count } else { 0 }
+        finalDossierDecisionType = if ($finalDossier) { $finalDossier.committeeDecisionType } else { $null }
         listedApplicationCount = @($applications).Count
         listedFirstApplicationId = if (@($applications).Count -gt 0) { @($applications)[0].applicationId } else { $null }
         meProfileAfter = $meAfterProfile.user.profileCompletionPercent

@@ -908,6 +908,18 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.NotNull(detailPayload);
         Assert.Equal(ApplicationCurrentStep.Approved, detailPayload!.CurrentStep);
         Assert.Equal(ApplicationStatus.Approved, detailPayload.Status);
+
+        var finalDossierResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}/final-dossier");
+        finalDossierResponse.EnsureSuccessStatusCode();
+        var finalDossierPayload = await ReadJsonAsync<ApplicationFinalDossierResponse>(finalDossierResponse);
+        Assert.NotNull(finalDossierPayload);
+        Assert.True(finalDossierPayload!.IsReady);
+        Assert.Equal("final_ready", finalDossierPayload.DossierStatus);
+        Assert.Equal(packagePayload.ReviewPackageId, finalDossierPayload.ReviewPackageId);
+        Assert.Equal(agendaPayload.AgendaItemId, finalDossierPayload.AgendaItemId);
+        Assert.Equal(committeeDecisionPayload.DecisionId, finalDossierPayload.CommitteeDecisionId);
+        Assert.Equal(ApplicationCommitteeDecisionType.Approved, finalDossierPayload.CommitteeDecisionType);
+        Assert.Contains("Kurul karar kayitlari", finalDossierPayload.IncludedSections);
     }
 
     [Fact]

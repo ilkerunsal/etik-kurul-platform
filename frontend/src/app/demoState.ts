@@ -2,13 +2,14 @@ import type {
   AccountStatus,
   ActivityEntry,
   ContactChannelType,
+  ApplicationFinalDossierResponse,
   MockMessageResponse,
   ProfileForm,
   RegisterForm,
   SessionUserResponse,
 } from "../types";
 
-export const STORAGE_KEY = "etik-kurul-phase1-ui:v4";
+export const STORAGE_KEY = "etik-kurul-phase1-ui:v5";
 
 export const emptyRegisterForm: RegisterForm = {
   firstName: "",
@@ -54,7 +55,8 @@ export type BusyAction =
   | "prepare-application"
   | "select-application"
   | "provision-review-roles"
-  | "review-operation";
+  | "review-operation"
+  | "fetch-final-dossier";
 
 export interface BannerState {
   tone: "success" | "error" | "neutral";
@@ -108,6 +110,7 @@ export interface SnapshotState {
   committeeRevisionResponseState: string | null;
   committeeDecisionStatus: number | null;
   committeeDecisionState: string | null;
+  finalDossier: ApplicationFinalDossierResponse | null;
 }
 
 export function createDefaultSnapshot(): SnapshotState {
@@ -157,6 +160,7 @@ export function createDefaultSnapshot(): SnapshotState {
     committeeRevisionResponseState: null,
     committeeDecisionStatus: null,
     committeeDecisionState: null,
+    finalDossier: null,
   };
 }
 
@@ -226,6 +230,7 @@ export function loadSnapshot(): SnapshotState {
       committeeRevisionResponseState: parsed.committeeRevisionResponseState ?? null,
       committeeDecisionStatus: parsed.committeeDecisionStatus ?? null,
       committeeDecisionState: parsed.committeeDecisionState ?? null,
+      finalDossier: parsed.finalDossier ?? null,
     };
   } catch {
     return createDefaultSnapshot();

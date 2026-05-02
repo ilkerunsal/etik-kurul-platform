@@ -853,6 +853,7 @@ button {
 .final-dossier-card {
   padding: 18px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 18px;
   align-items: center;
@@ -886,6 +887,8 @@ button {
 .final-dossier-card__status {
   min-width: 210px;
   padding: 14px;
+  display: grid;
+  gap: 10px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.68);
 }
@@ -896,8 +899,48 @@ button {
 }
 
 .final-dossier-card__status small {
-  margin-top: 8px;
   color: var(--muted);
+}
+
+.final-dossier-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.final-dossier-card__facts div {
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 250, 242, 0.74);
+  border: 1px solid rgba(31, 23, 16, 0.08);
+}
+
+.final-dossier-card__facts span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.final-dossier-card__facts strong {
+  margin-top: 4px;
+}
+
+.final-dossier-card__sections {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.final-dossier-card__sections span {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(18, 99, 78, 0.1);
+  color: var(--success);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .operation-card h4 {
@@ -1178,6 +1221,7 @@ button {
   .application-demo-grid,
   .session-stack,
   .meta-list,
+  .final-dossier-card__facts,
   .auth-proof-grid {
     grid-template-columns: 1fr;
   }

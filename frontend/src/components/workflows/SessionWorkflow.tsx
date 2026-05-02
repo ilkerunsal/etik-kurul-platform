@@ -26,6 +26,7 @@ import {
 import type { WorkflowView } from "../../app/workflow";
 import type { BusyAction } from "../../app/demoState";
 import type {
+  ApplicationFinalDossierResponse,
   ApplicationSummaryResponse,
   ApplicationValidationResponse,
   SessionUserResponse,
@@ -54,6 +55,7 @@ interface SessionWorkflowProps {
   committeeRevisionStatus: number | null;
   currentApplication: ApplicationSummaryResponse | null;
   currentUser: SessionUserResponse | null;
+  finalDossier: ApplicationFinalDossierResponse | null;
   expertAssignmentState: string | null;
   expertAssignmentStatus: number | null;
   expertSession: ReviewRoleSessionView | null;
@@ -82,6 +84,7 @@ interface SessionWorkflowProps {
   onCreateApplicationDraft: (title: string, summary: string) => void;
   onFetchAgendaQueue: () => void;
   onFetchApplications: () => void;
+  onFetchFinalDossier: () => void;
   onFetchExpertQueue: () => void;
   onFetchPackageQueue: () => void;
   onFetchSession: () => void;
@@ -146,6 +149,7 @@ export function SessionWorkflow({
   committeeRevisionStatus,
   currentApplication,
   currentUser,
+  finalDossier,
   expertAssignmentState,
   expertAssignmentStatus,
   expertSession,
@@ -174,6 +178,7 @@ export function SessionWorkflow({
   onCreateApplicationDraft,
   onFetchAgendaQueue,
   onFetchApplications,
+  onFetchFinalDossier,
   onFetchExpertQueue,
   onFetchPackageQueue,
   onFetchSession,
@@ -280,6 +285,7 @@ export function SessionWorkflow({
           committeeRevisionStatus={committeeRevisionStatus}
           currentApplication={currentApplication}
           decisionItems={reviewDecisionItems}
+          finalDossier={finalDossier}
           expertAssignmentStatus={expertAssignmentStatus}
           expertDecisionStatus={expertDecisionStatus}
           expertQueueCount={expertQueueCount}
@@ -297,6 +303,7 @@ export function SessionWorkflow({
           onApproveExpert={onApproveExpert}
           onAssignExpert={onAssignExpert}
           onFetchAgendaQueue={onFetchAgendaQueue}
+          onFetchFinalDossier={onFetchFinalDossier}
           onFetchExpertQueue={onFetchExpertQueue}
           onFetchPackageQueue={onFetchPackageQueue}
           onPreparePackage={onPreparePackage}
@@ -375,6 +382,7 @@ export function SessionWorkflow({
                 <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
                 <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>
                 <div><span>Committee decision</span><strong>{formatExpertWorkflowStatus(committeeDecisionStatus, committeeDecisionState)}</strong></div>
+                <div><span>Karar dosyasi</span><strong>{finalDossier?.dossierStatus ?? "Okunmadi"}</strong></div>
               </div>
             ) : (
               <p>Policy gectikten sonra demo akisi create, intake, committee, form, document, validate ve submit adimlarini; ardindan ayrik secretariat, expert ve arastirmaci oturumlariyla atama, review baslangici, revizyon yanitlari, uzman onayi, paketleme, kurul gundemi ve kurul onayini calistirir.</p>

@@ -1,0 +1,28 @@
+using EtikKurul.Infrastructure.Enums;
+
+namespace EtikKurul.Modules.Applications.Models;
+
+public sealed record ApplicationFinalDossierResult(
+    Guid ApplicationId,
+    bool IsReady,
+    string DossierStatus,
+    DateTimeOffset GeneratedAt,
+    ApplicationSummaryResult Application,
+    Guid? ReviewPackageId,
+    DateTimeOffset? ReviewPackagePreparedAt,
+    string? ReviewPackageNote,
+    Guid? AgendaItemId,
+    DateTimeOffset? AgendaAddedAt,
+    Guid? CommitteeId,
+    string? AgendaNote,
+    Guid? CommitteeDecisionId,
+    ApplicationCommitteeDecisionType? CommitteeDecisionType,
+    DateTimeOffset? CommitteeDecisionAt,
+    string? CommitteeDecisionNote,
+    int FormCount,
+    int DocumentCount,
+    int ChecklistItemCount,
+    int ExpertDecisionCount,
+    int ApplicantRevisionResponseCount,
+    int CommitteeRevisionResponseCount,
+    IReadOnlyList<string> IncludedSections);

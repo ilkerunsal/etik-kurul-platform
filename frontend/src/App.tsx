@@ -5,6 +5,7 @@ import {
   createApplication,
   createProfile,
   fetchApplication,
+  fetchApplicationFinalDossier,
   fetchMyApplications,
   fetchCommittees,
   fetchCurrentProfile,
@@ -27,6 +28,7 @@ import {
 } from "./api";
 import type {
   AccountStatus,
+  ApplicationFinalDossierResponse,
   ApplicationSummaryResponse,
   ApplicationValidationResponse,
   ActivityEntry,
@@ -128,6 +130,7 @@ export default function App() {
   const [myApplications, setMyApplications] = useState<ApplicationSummaryResponse[]>([]);
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
   const [applicationCommitteeCount, setApplicationCommitteeCount] = useState<number | null>(null);
+  const [finalDossier, setFinalDossier] = useState<ApplicationFinalDossierResponse | null>(snapshot.finalDossier);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>(() => getInitialAuthMode());
   const [workflowView, setWorkflowView] = useState<WorkflowView>(() => getInitialWorkflowView(snapshot));
@@ -144,7 +147,11 @@ export default function App() {
   const identityDone = accountStatus === "active" || hasSession;
   const profileDone = (profileCompletionPercent ?? 0) >= 100;
   const applicationDone = !!currentApplication || applicationCreateStatus === 201;
-  const reviewDone = currentApplication?.currentStep === "Approved" || committeeDecisionState === "Approved";
+  const reviewDone =
+    currentApplication?.currentStep === "Approved" ||
+    currentApplication?.currentStep === "Rejected" ||
+    committeeDecisionState === "Approved" ||
+    committeeDecisionState === "Rejected";
   const workflowSteps: WorkflowStep[] = [
     {
       id: "identity" as const,
@@ -260,6 +267,7 @@ export default function App() {
       committeeRevisionResponseState,
       committeeDecisionStatus,
       committeeDecisionState,
+      finalDossier,
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -283,6 +291,7 @@ export default function App() {
     expertAssignmentStatus,
     expertDecisionState,
     expertDecisionStatus,
+    finalDossier,
     expertQueueCount,
     expertReviewState,
     expertReviewStatus,
@@ -388,6 +397,9 @@ export default function App() {
     startTransition(() => {
       setMyApplications(applications);
       setCurrentApplication(focusedApplication);
+      setFinalDossier((current) =>
+        current && focusedApplication?.applicationId === current.applicationId ? current : null,
+      );
     });
   }
 
@@ -471,6 +483,7 @@ export default function App() {
             setCurrentUser(null);
             setSecretariatSession(null);
             setExpertSession(null);
+            setFinalDossier(null);
             setWorkflowView("profile");
           });
           setBanner({
@@ -496,6 +509,62 @@ export default function App() {
       cancelled = true;
     };
   }, [sessionToken]);
+
+  useEffect(() => {
+    const applicationId = currentApplication?.applicationId;
+    const currentStep = currentApplication?.currentStep;
+
+    if (!sessionToken || !applicationId || (currentStep !== "Approved" && currentStep !== "Rejected")) {
+      return;
+    }
+
+    if (finalDossier?.applicationId === applicationId && finalDossier.isReady) {
+      return;
+    }
+
+    const targetApplicationId = applicationId;
+    let cancelled = false;
+
+    async function loadFinalDossier() {
+      try {
+        const dossier = await fetchApplicationFinalDossier(sessionToken, targetApplicationId);
+        if (!cancelled) {
+          setFinalDossier(dossier);
+        }
+      } catch {
+        if (!cancelled) {
+          setFinalDossier(null);
+        }
+      }
+    }
+
+    void loadFinalDossier();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentApplication?.applicationId,
+    currentApplication?.currentStep,
+    finalDossier?.applicationId,
+    finalDossier?.isReady,
+    sessionToken,
+  ]);
+
+  useEffect(() => {
+    if (!currentApplication || !finalDossier) {
+      return;
+    }
+
+    if (finalDossier.applicationId !== currentApplication.applicationId) {
+      setFinalDossier(null);
+      return;
+    }
+
+    if (!finalDossier.isReady && finalDossier.application.currentStep !== currentApplication.currentStep) {
+      setFinalDossier(null);
+    }
+  }, [currentApplication, finalDossier]);
 
   async function refreshMockInbox(silent = false) {
     if (!registerForm.email && !registerForm.phone) {
@@ -556,6 +625,7 @@ export default function App() {
       setRevisionResponseState(null);
       setExpertDecisionStatus(null);
       setExpertDecisionState(null);
+      setFinalDossier(null);
       setCurrentApplication(null);
       setMyApplications([]);
       setApplicationValidation(null);
@@ -830,6 +900,40 @@ export default function App() {
     }
   }
 
+  async function handleFetchFinalDossier() {
+    const applicationId = currentApplication?.applicationId;
+
+    if (!sessionToken || !applicationId) {
+      setBanner({
+        tone: "neutral",
+        title: "Karar dosyasi hazir degil",
+        detail: "Once aktif oturumla bir basvuru secin.",
+      });
+      pushActivity("Karar dosyasi secili basvuru olmadigi icin okunmadi.", "neutral");
+      return;
+    }
+
+    setBusyAction("fetch-final-dossier");
+
+    try {
+      const dossier = await fetchApplicationFinalDossier(sessionToken, applicationId);
+      setFinalDossier(dossier);
+      setBanner({
+        tone: dossier.isReady ? "success" : "neutral",
+        title: dossier.isReady ? "Karar dosyasi hazir" : "Karar dosyasi beklemede",
+        detail: dossier.isReady
+          ? "Kurul karari ve paket ozeti basvuru kaydindan okundu."
+          : `Dosya durumu: ${dossier.dossierStatus}.`,
+      });
+      pushActivity("Kurul karar dosyasi ozeti yuklendi.", dossier.isReady ? "success" : "neutral");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Karar dosyasi okunamadi", detail: getErrorMessage(error) });
+      pushActivity("Kurul karar dosyasi endpointi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function handleProbeApplicationAccess() {
     if (!sessionToken) {
       return;
@@ -922,6 +1026,7 @@ export default function App() {
         setApplicationSubmitState(null);
         setApplicationValidation(null);
         setApplicationCommitteeCount(null);
+        setFinalDossier(null);
         setMyApplications(applications);
         setCurrentApplication(createdApplication);
       });
@@ -980,6 +1085,7 @@ export default function App() {
     }
 
     setBusyAction("prepare-application");
+    setFinalDossier(null);
 
     try {
       const committees = await fetchCommittees(sessionToken);
@@ -1075,6 +1181,7 @@ export default function App() {
         setApplicationCreateState("blocked");
         setApplicationSubmitStatus(null);
         setApplicationSubmitState(null);
+        setFinalDossier(null);
         setCurrentApplication(null);
         setMyApplications([]);
         setApplicationValidation(null);
@@ -1111,6 +1218,9 @@ export default function App() {
         setCurrentApplication(selectedApplication);
         setMyApplications(applications);
         setApplicationValidation(null);
+        setFinalDossier((current) =>
+          current && current.applicationId === selectedApplication.applicationId ? current : null,
+        );
       });
       setBanner({
         tone: "neutral",
@@ -1155,6 +1265,7 @@ export default function App() {
     setCommitteeRevisionResponseState(null);
     setCommitteeDecisionStatus(null);
     setCommitteeDecisionState(null);
+    setFinalDossier(null);
     setSecretariatSession(null);
     setExpertSession(null);
     setCurrentApplication(null);
@@ -1216,6 +1327,7 @@ export default function App() {
     setCommitteeRevisionResponseState(next.committeeRevisionResponseState);
     setCommitteeDecisionStatus(next.committeeDecisionStatus);
     setCommitteeDecisionState(next.committeeDecisionState);
+    setFinalDossier(next.finalDossier);
     setSecretariatSession(null);
     setExpertSession(null);
     setCurrentApplication(null);
@@ -1334,6 +1446,7 @@ export default function App() {
               committeeRevisionStatus={committeeRevisionStatus}
               currentApplication={currentApplication}
               currentUser={currentUser}
+              finalDossier={finalDossier}
               expertAssignmentState={expertAssignmentState}
               expertAssignmentStatus={expertAssignmentStatus}
               expertSession={expertSession}
@@ -1362,6 +1475,7 @@ export default function App() {
               onCreateApplicationDraft={(title, summary) => void handleCreateApplicationDraft(title, summary)}
               onFetchAgendaQueue={() => void handleFetchAgendaQueue()}
               onFetchApplications={() => void handleFetchApplications()}
+              onFetchFinalDossier={() => void handleFetchFinalDossier()}
               onFetchExpertQueue={() => void handleFetchExpertQueue()}
               onFetchPackageQueue={() => void handleFetchPackageQueue()}
               onFetchSession={() => void handleFetchSession()}

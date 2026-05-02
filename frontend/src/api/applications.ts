@@ -7,6 +7,7 @@ import type {
   ApplicationEntryMode,
   ApplicationExpertAssignmentResponse,
   ApplicationExpertReviewDecisionResponse,
+  ApplicationFinalDossierResponse,
   ApplicationFormResponse,
   ApplicationRevisionResponseResponse,
   ApplicationReviewPackageResponse,
@@ -59,6 +60,18 @@ export function fetchMyApplications(accessToken: string) {
 export function fetchApplication(accessToken: string, applicationId: string) {
   return request<ApplicationSummaryResponse>(
     `/applications/${applicationId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+}
+
+export function fetchApplicationFinalDossier(accessToken: string, applicationId: string) {
+  return request<ApplicationFinalDossierResponse>(
+    `/applications/${applicationId}/final-dossier`,
     {
       method: "GET",
       headers: {

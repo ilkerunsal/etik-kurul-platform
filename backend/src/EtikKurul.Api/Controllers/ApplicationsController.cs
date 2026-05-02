@@ -46,6 +46,46 @@ public class ApplicationsController(IApplicationService applicationService) : Co
         return Ok(MapSummary(result));
     }
 
+    [HttpGet("{id:guid}/final-dossier")]
+    [ProducesResponseType<ApplicationFinalDossierResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApplicationFinalDossierResponse>> GetFinalDossier(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.GetFinalDossierAsync(userId, id, cancellationToken);
+        return Ok(new ApplicationFinalDossierResponse(
+            result.ApplicationId,
+            result.IsReady,
+            result.DossierStatus,
+            result.GeneratedAt,
+            MapSummary(result.Application),
+            result.ReviewPackageId,
+            result.ReviewPackagePreparedAt,
+            result.ReviewPackageNote,
+            result.AgendaItemId,
+            result.AgendaAddedAt,
+            result.CommitteeId,
+            result.AgendaNote,
+            result.CommitteeDecisionId,
+            result.CommitteeDecisionType,
+            result.CommitteeDecisionAt,
+            result.CommitteeDecisionNote,
+            result.FormCount,
+            result.DocumentCount,
+            result.ChecklistItemCount,
+            result.ExpertDecisionCount,
+            result.ApplicantRevisionResponseCount,
+            result.CommitteeRevisionResponseCount,
+            result.IncludedSections));
+    }
+
     [Authorize(Policy = ApplicationPolicies.CanOpenApplication)]
     [HttpPost]
     [ProducesResponseType<ApplicationSummaryResponse>(StatusCodes.Status201Created)]

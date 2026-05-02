@@ -177,6 +177,39 @@ export interface ApplicationSummaryResponse {
   summary: string | null;
 }
 
+export type ApplicationFinalDossierStatus =
+  | "not_ready"
+  | "package_pending"
+  | "package_ready"
+  | "agenda_ready"
+  | "final_ready";
+
+export interface ApplicationFinalDossierResponse {
+  applicationId: string;
+  isReady: boolean;
+  dossierStatus: ApplicationFinalDossierStatus;
+  generatedAt: string;
+  application: ApplicationSummaryResponse;
+  reviewPackageId: string | null;
+  reviewPackagePreparedAt: string | null;
+  reviewPackageNote: string | null;
+  agendaItemId: string | null;
+  agendaAddedAt: string | null;
+  committeeId: string | null;
+  agendaNote: string | null;
+  committeeDecisionId: string | null;
+  committeeDecisionType: ApplicationCommitteeDecisionType | null;
+  committeeDecisionAt: string | null;
+  committeeDecisionNote: string | null;
+  formCount: number;
+  documentCount: number;
+  checklistItemCount: number;
+  expertDecisionCount: number;
+  applicantRevisionResponseCount: number;
+  committeeRevisionResponseCount: number;
+  includedSections: string[];
+}
+
 export interface CommitteeLookupResponse {
   committeeId: string;
   code: string;
