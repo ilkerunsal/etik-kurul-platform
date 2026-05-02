@@ -1,4 +1,4 @@
-import { request } from "./client";
+import { request, requestText } from "./client";
 import type {
   ApplicationCommitteeAgendaItemResponse,
   ApplicationCommitteeDecisionResponse,
@@ -79,6 +79,24 @@ export function fetchApplicationFinalDossier(accessToken: string, applicationId:
       },
     },
   );
+}
+
+export async function fetchApplicationFinalDossierDocument(accessToken: string, applicationId: string) {
+  const result = await requestText(
+    `/applications/${applicationId}/final-dossier/document`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  return {
+    html: result.text,
+    contentType: result.contentType,
+    fileName: result.fileName ?? `etik-kurul-karar-dosyasi-${applicationId}.html`,
+  };
 }
 
 export function setApplicationEntryMode(

@@ -122,6 +122,26 @@ public class ApplicationService(
             includedSections);
     }
 
+    public async Task<ApplicationFinalDossierDocumentResult> GetFinalDossierDocumentAsync(
+        Guid userId,
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var dossier = await GetFinalDossierAsync(userId, applicationId, cancellationToken);
+
+        if (!dossier.IsReady)
+        {
+            throw new ConflictAppException("Final dossier document can only be generated after a final committee decision.");
+        }
+
+        var fileName = $"etik-kurul-karar-dosyasi-{dossier.ApplicationId:N}.html";
+        return new ApplicationFinalDossierDocumentResult(
+            dossier.ApplicationId,
+            fileName,
+            "text/html; charset=utf-8",
+            BuildFinalDossierHtml(dossier));
+    }
+
     public async Task<ApplicationSummaryResult> CreateAsync(CreateApplicationCommand command, CancellationToken cancellationToken)
     {
         var user = await dbContext.Users
@@ -713,6 +733,121 @@ public class ApplicationService(
 
         return sections;
     }
+
+    private static string BuildFinalDossierHtml(ApplicationFinalDossierResult dossier)
+    {
+        var application = dossier.Application;
+        var title = string.IsNullOrWhiteSpace(application.Title)
+            ? "Etik Kurul Basvurusu"
+            : application.Title;
+        var summary = string.IsNullOrWhiteSpace(application.Summary)
+            ? "Basvuru ozeti girilmemis."
+            : application.Summary;
+
+        return $$"""
+            <!doctype html>
+            <html lang="tr">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>{{Html(title)}} - Kurul Karar Dosyasi</title>
+              <style>
+                :root { color-scheme: light; --ink: #17110c; --muted: #66584a; --line: #dfd4c5; --accent: #1b6b6d; --paper: #fffaf2; }
+                * { box-sizing: border-box; }
+                body { margin: 0; padding: 40px; background: #efe8dd; color: var(--ink); font-family: "Segoe UI", Arial, sans-serif; line-height: 1.5; }
+                main { max-width: 920px; margin: 0 auto; padding: 42px; background: var(--paper); border: 1px solid var(--line); border-radius: 28px; box-shadow: 0 24px 70px rgba(42, 30, 20, 0.12); }
+                header { display: grid; gap: 14px; padding-bottom: 24px; border-bottom: 2px solid var(--line); }
+                h1, h2 { margin: 0; line-height: 1.05; }
+                h1 { font-size: 2.4rem; letter-spacing: -0.03em; }
+                h2 { margin-top: 28px; font-size: 1.25rem; color: var(--accent); }
+                p { margin: 8px 0 0; color: var(--muted); }
+                table { width: 100%; margin-top: 16px; border-collapse: collapse; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; }
+                th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+                th { width: 34%; background: rgba(27, 107, 109, 0.08); color: var(--ink); }
+                tr:last-child th, tr:last-child td { border-bottom: 0; }
+                .badge { display: inline-flex; width: fit-content; padding: 7px 12px; border-radius: 999px; background: rgba(18, 99, 78, 0.12); color: #12634e; font-weight: 700; }
+                .sections { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 0; list-style: none; }
+                .sections li { padding: 8px 12px; border-radius: 999px; background: #f1eadf; border: 1px solid var(--line); font-weight: 700; }
+                footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+                @media print {
+                  body { padding: 0; background: white; }
+                  main { box-shadow: none; border: 0; border-radius: 0; }
+                }
+              </style>
+            </head>
+            <body>
+              <main>
+                <header>
+                  <span class="badge">{{Html(dossier.CommitteeDecisionType?.ToString() ?? "Final")}}</span>
+                  <h1>Kurul Karar Dosyasi</h1>
+                  <p>{{Html(title)}}</p>
+                </header>
+
+                <section>
+                  <h2>Basvuru Ozeti</h2>
+                  <table>
+                    <tr><th>Basvuru ID</th><td>{{Html(dossier.ApplicationId.ToString())}}</td></tr>
+                    <tr><th>Referans No</th><td>{{Html(application.PublicRefNo ?? "-")}}</td></tr>
+                    <tr><th>Durum</th><td>{{Html(application.Status.ToString())}} / {{Html(application.CurrentStep.ToString())}}</td></tr>
+                    <tr><th>Baslik</th><td>{{Html(title)}}</td></tr>
+                    <tr><th>Ozet</th><td>{{Html(summary)}}</td></tr>
+                    <tr><th>Olusturma Zamani</th><td>{{Html(FormatDate(dossier.GeneratedAt))}}</td></tr>
+                  </table>
+                </section>
+
+                <section>
+                  <h2>Kurul Karari</h2>
+                  <table>
+                    <tr><th>Karar ID</th><td>{{Html(dossier.CommitteeDecisionId?.ToString() ?? "-")}}</td></tr>
+                    <tr><th>Karar Tipi</th><td>{{Html(dossier.CommitteeDecisionType?.ToString() ?? "-")}}</td></tr>
+                    <tr><th>Karar Tarihi</th><td>{{Html(dossier.CommitteeDecisionAt.HasValue ? FormatDate(dossier.CommitteeDecisionAt.Value) : "-")}}</td></tr>
+                    <tr><th>Karar Notu</th><td>{{Html(dossier.CommitteeDecisionNote ?? "-")}}</td></tr>
+                  </table>
+                </section>
+
+                <section>
+                  <h2>Paket ve Gundem</h2>
+                  <table>
+                    <tr><th>Paket ID</th><td>{{Html(dossier.ReviewPackageId?.ToString() ?? "-")}}</td></tr>
+                    <tr><th>Paket Tarihi</th><td>{{Html(dossier.ReviewPackagePreparedAt.HasValue ? FormatDate(dossier.ReviewPackagePreparedAt.Value) : "-")}}</td></tr>
+                    <tr><th>Paket Notu</th><td>{{Html(dossier.ReviewPackageNote ?? "-")}}</td></tr>
+                    <tr><th>Gundem ID</th><td>{{Html(dossier.AgendaItemId?.ToString() ?? "-")}}</td></tr>
+                    <tr><th>Komite ID</th><td>{{Html(dossier.CommitteeId?.ToString() ?? "-")}}</td></tr>
+                    <tr><th>Gundem Notu</th><td>{{Html(dossier.AgendaNote ?? "-")}}</td></tr>
+                  </table>
+                </section>
+
+                <section>
+                  <h2>Dosya Kapsami</h2>
+                  <table>
+                    <tr><th>Form</th><td>{{dossier.FormCount}}</td></tr>
+                    <tr><th>Dokuman</th><td>{{dossier.DocumentCount}}</td></tr>
+                    <tr><th>Checklist</th><td>{{dossier.ChecklistItemCount}}</td></tr>
+                    <tr><th>Uzman Karari</th><td>{{dossier.ExpertDecisionCount}}</td></tr>
+                    <tr><th>Arastirmaci Revizyon Yaniti</th><td>{{dossier.ApplicantRevisionResponseCount + dossier.CommitteeRevisionResponseCount}}</td></tr>
+                  </table>
+                  <ul class="sections">
+                    {{BuildSectionList(dossier.IncludedSections)}}
+                  </ul>
+                </section>
+
+                <footer>
+                  Bu cikti Etik Kurul Platformu tarafindan application-level kayitlardan uretilmistir. TCKN ve dogum tarihi bu dosyada yer almaz.
+                </footer>
+              </main>
+            </body>
+            </html>
+            """;
+    }
+
+    private static string BuildSectionList(IReadOnlyList<string> sections)
+        => string.Join(Environment.NewLine, sections.Select(section => $"<li>{Html(section)}</li>"));
+
+    private static string FormatDate(DateTimeOffset value)
+        => value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
+
+    private static string Html(string value)
+        => System.Net.WebUtility.HtmlEncode(value);
 
     private static ApplicationSummaryResult MapSummary(Application application)
         => new(

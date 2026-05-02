@@ -56,7 +56,8 @@ export type BusyAction =
   | "select-application"
   | "provision-review-roles"
   | "review-operation"
-  | "fetch-final-dossier";
+  | "fetch-final-dossier"
+  | "fetch-final-dossier-document";
 
 export interface BannerState {
   tone: "success" | "error" | "neutral";

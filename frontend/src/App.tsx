@@ -5,6 +5,7 @@ import {
   createApplication,
   createProfile,
   fetchApplication,
+  fetchApplicationFinalDossierDocument,
   fetchApplicationFinalDossier,
   fetchMyApplications,
   fetchCommittees,
@@ -131,6 +132,8 @@ export default function App() {
   const [applicationValidation, setApplicationValidation] = useState<ApplicationValidationResponse | null>(null);
   const [applicationCommitteeCount, setApplicationCommitteeCount] = useState<number | null>(null);
   const [finalDossier, setFinalDossier] = useState<ApplicationFinalDossierResponse | null>(snapshot.finalDossier);
+  const [finalDossierDocumentHtml, setFinalDossierDocumentHtml] = useState<string | null>(null);
+  const [finalDossierDocumentFileName, setFinalDossierDocumentFileName] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>(() => getInitialAuthMode());
   const [workflowView, setWorkflowView] = useState<WorkflowView>(() => getInitialWorkflowView(snapshot));
@@ -351,6 +354,24 @@ export default function App() {
     setProfileCompletionPercent(profile.profileCompletionPercent);
   }
 
+  function clearFinalDossierDocument() {
+    setFinalDossierDocumentHtml(null);
+    setFinalDossierDocumentFileName(null);
+  }
+
+  function downloadHtmlDocument(html: string, fileName: string, contentType: string) {
+    const blob = new Blob([html], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function loadCurrentProfile(accessToken: string) {
     try {
       return await fetchCurrentProfile(accessToken);
@@ -553,16 +574,19 @@ export default function App() {
 
   useEffect(() => {
     if (!currentApplication || !finalDossier) {
+      clearFinalDossierDocument();
       return;
     }
 
     if (finalDossier.applicationId !== currentApplication.applicationId) {
       setFinalDossier(null);
+      clearFinalDossierDocument();
       return;
     }
 
     if (!finalDossier.isReady && finalDossier.application.currentStep !== currentApplication.currentStep) {
       setFinalDossier(null);
+      clearFinalDossierDocument();
     }
   }, [currentApplication, finalDossier]);
 
@@ -929,6 +953,58 @@ export default function App() {
     } catch (error) {
       setBanner({ tone: "error", title: "Karar dosyasi okunamadi", detail: getErrorMessage(error) });
       pushActivity("Kurul karar dosyasi endpointi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function loadFinalDossierDocument() {
+    const applicationId = currentApplication?.applicationId;
+
+    if (!sessionToken || !applicationId) {
+      throw new Error("Once aktif oturumla bir basvuru secin.");
+    }
+
+    const document = await fetchApplicationFinalDossierDocument(sessionToken, applicationId);
+    setFinalDossierDocumentHtml(document.html);
+    setFinalDossierDocumentFileName(document.fileName);
+    return document;
+  }
+
+  async function handlePreviewFinalDossierDocument() {
+    setBusyAction("fetch-final-dossier-document");
+
+    try {
+      await loadFinalDossierDocument();
+      setBanner({
+        tone: "success",
+        title: "Karar dosyasi onizlemeye hazir",
+        detail: "HTML karar dosyasi korumali endpointten alindi.",
+      });
+      pushActivity("Kurul karar dosyasi HTML onizlemesi yuklendi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Karar dosyasi uretilemedi", detail: getErrorMessage(error) });
+      pushActivity("Kurul karar dosyasi HTML endpointi hata verdi.", "error");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleDownloadFinalDossierDocument() {
+    setBusyAction("fetch-final-dossier-document");
+
+    try {
+      const document = await loadFinalDossierDocument();
+      downloadHtmlDocument(document.html, document.fileName, document.contentType);
+      setBanner({
+        tone: "success",
+        title: "Karar dosyasi indirildi",
+        detail: `${document.fileName} dosyasi tarayici indirme akisiyle hazirlandi.`,
+      });
+      pushActivity("Kurul karar dosyasi HTML olarak indirildi.", "success");
+    } catch (error) {
+      setBanner({ tone: "error", title: "Karar dosyasi indirilemedi", detail: getErrorMessage(error) });
+      pushActivity("Kurul karar dosyasi indirme akisi hata verdi.", "error");
     } finally {
       setBusyAction(null);
     }
@@ -1447,6 +1523,8 @@ export default function App() {
               currentApplication={currentApplication}
               currentUser={currentUser}
               finalDossier={finalDossier}
+              finalDossierDocumentFileName={finalDossierDocumentFileName}
+              finalDossierDocumentHtml={finalDossierDocumentHtml}
               expertAssignmentState={expertAssignmentState}
               expertAssignmentStatus={expertAssignmentStatus}
               expertSession={expertSession}
@@ -1473,6 +1551,7 @@ export default function App() {
               onApproveExpert={() => void handleApproveExpertReview()}
               onAssignExpert={() => void handleAssignExpert()}
               onCreateApplicationDraft={(title, summary) => void handleCreateApplicationDraft(title, summary)}
+              onDownloadFinalDossierDocument={() => void handleDownloadFinalDossierDocument()}
               onFetchAgendaQueue={() => void handleFetchAgendaQueue()}
               onFetchApplications={() => void handleFetchApplications()}
               onFetchFinalDossier={() => void handleFetchFinalDossier()}
@@ -1481,6 +1560,7 @@ export default function App() {
               onFetchSession={() => void handleFetchSession()}
               onLogin={() => void handleLogin()}
               onLogout={handleLogout}
+              onPreviewFinalDossierDocument={() => void handlePreviewFinalDossierDocument()}
               onPrepareApplicationSubmission={() => void handlePrepareApplicationSubmission()}
               onPreparePackage={() => void handlePreparePackage()}
               onProvisionReviewRoles={() => void handleProvisionReviewRoles()}

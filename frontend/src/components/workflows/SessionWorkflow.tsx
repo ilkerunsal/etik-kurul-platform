@@ -56,6 +56,8 @@ interface SessionWorkflowProps {
   currentApplication: ApplicationSummaryResponse | null;
   currentUser: SessionUserResponse | null;
   finalDossier: ApplicationFinalDossierResponse | null;
+  finalDossierDocumentFileName: string | null;
+  finalDossierDocumentHtml: string | null;
   expertAssignmentState: string | null;
   expertAssignmentStatus: number | null;
   expertSession: ReviewRoleSessionView | null;
@@ -82,6 +84,7 @@ interface SessionWorkflowProps {
   onApproveExpert: () => void;
   onAssignExpert: () => void;
   onCreateApplicationDraft: (title: string, summary: string) => void;
+  onDownloadFinalDossierDocument: () => void;
   onFetchAgendaQueue: () => void;
   onFetchApplications: () => void;
   onFetchFinalDossier: () => void;
@@ -90,6 +93,7 @@ interface SessionWorkflowProps {
   onFetchSession: () => void;
   onLogin: () => void;
   onLogout: () => void;
+  onPreviewFinalDossierDocument: () => void;
   onPrepareApplicationSubmission: () => void;
   onPreparePackage: () => void;
   onProvisionReviewRoles: () => void;
@@ -150,6 +154,8 @@ export function SessionWorkflow({
   currentApplication,
   currentUser,
   finalDossier,
+  finalDossierDocumentFileName,
+  finalDossierDocumentHtml,
   expertAssignmentState,
   expertAssignmentStatus,
   expertSession,
@@ -176,6 +182,7 @@ export function SessionWorkflow({
   onApproveExpert,
   onAssignExpert,
   onCreateApplicationDraft,
+  onDownloadFinalDossierDocument,
   onFetchAgendaQueue,
   onFetchApplications,
   onFetchFinalDossier,
@@ -184,6 +191,7 @@ export function SessionWorkflow({
   onFetchSession,
   onLogin,
   onLogout,
+  onPreviewFinalDossierDocument,
   onPrepareApplicationSubmission,
   onPreparePackage,
   onProvisionReviewRoles,
@@ -286,6 +294,8 @@ export function SessionWorkflow({
           currentApplication={currentApplication}
           decisionItems={reviewDecisionItems}
           finalDossier={finalDossier}
+          finalDossierDocumentFileName={finalDossierDocumentFileName}
+          finalDossierDocumentHtml={finalDossierDocumentHtml}
           expertAssignmentStatus={expertAssignmentStatus}
           expertDecisionStatus={expertDecisionStatus}
           expertQueueCount={expertQueueCount}
@@ -302,11 +312,13 @@ export function SessionWorkflow({
           onApproveCommittee={onApproveCommittee}
           onApproveExpert={onApproveExpert}
           onAssignExpert={onAssignExpert}
+          onDownloadFinalDossierDocument={onDownloadFinalDossierDocument}
           onFetchAgendaQueue={onFetchAgendaQueue}
           onFetchFinalDossier={onFetchFinalDossier}
           onFetchExpertQueue={onFetchExpertQueue}
           onFetchPackageQueue={onFetchPackageQueue}
           onPreparePackage={onPreparePackage}
+          onPreviewFinalDossierDocument={onPreviewFinalDossierDocument}
           onProvisionRoles={onProvisionReviewRoles}
           onRequestCommitteeRevision={onRequestCommitteeRevision}
           onRequestExpertRevision={onRequestExpertRevision}

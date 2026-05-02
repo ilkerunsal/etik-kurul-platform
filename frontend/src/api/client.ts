@@ -41,6 +41,47 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+export async function requestText(path: string, init?: RequestInit) {
+  const response = await fetch(`${API_PREFIX}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const problem = contentType.includes("application/json") || contentType.includes("+json")
+      ? ((await response.json()) as ProblemDetailsLike)
+      : undefined;
+
+    throw new ApiError(
+      problem?.detail ?? problem?.title ?? "Beklenmeyen bir hata olustu.",
+      response.status,
+    );
+  }
+
+  return {
+    text: await response.text(),
+    contentType: response.headers.get("content-type") ?? "text/plain",
+    fileName: getFileName(response.headers.get("content-disposition")),
+  };
+}
+
+function getFileName(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1].replace(/^"|"$/g, ""));
+  }
+
+  const fileNameMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
+  return fileNameMatch?.[1] ?? null;
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message;

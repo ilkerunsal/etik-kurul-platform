@@ -283,6 +283,7 @@ try {
     $applications = @()
     $applicationDetail = $null
     $finalDossier = $null
+    $finalDossierDocument = $null
 
     if ($validation.isValid) {
         $submittedApplication = Invoke-Json -Method Post -Uri "$BaseUrl/applications/$($createApplication.applicationId)/submit" -BearerToken $login.accessToken -Body @{}
@@ -344,6 +345,9 @@ try {
 
     $applicationDetail = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)" -BearerToken $login.accessToken
     $finalDossier = Invoke-Json -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)/final-dossier" -BearerToken $login.accessToken
+    $finalDossierDocument = Invoke-WebRequest -UseBasicParsing -Method Get -Uri "$BaseUrl/applications/$($createApplication.applicationId)/final-dossier/document" -Headers @{
+        Authorization = "Bearer $($login.accessToken)"
+    }
     $applications = Invoke-Json -Method Get -Uri "$BaseUrl/applications" -BearerToken $login.accessToken
 
     [pscustomobject]@{
@@ -413,6 +417,9 @@ try {
         finalDossierReady = if ($finalDossier) { $finalDossier.isReady } else { $null }
         finalDossierSectionCount = if ($finalDossier) { @($finalDossier.includedSections).Count } else { 0 }
         finalDossierDecisionType = if ($finalDossier) { $finalDossier.committeeDecisionType } else { $null }
+        finalDossierDocumentStatus = if ($finalDossierDocument) { [int]$finalDossierDocument.StatusCode } else { $null }
+        finalDossierDocumentContentType = if ($finalDossierDocument) { $finalDossierDocument.Headers["Content-Type"] } else { $null }
+        finalDossierDocumentLength = if ($finalDossierDocument) { $finalDossierDocument.Content.Length } else { 0 }
         listedApplicationCount = @($applications).Count
         listedFirstApplicationId = if (@($applications).Count -gt 0) { @($applications)[0].applicationId } else { $null }
         meProfileAfter = $meAfterProfile.user.profileCompletionPercent

@@ -35,6 +35,8 @@ interface ReviewWorkspaceProps {
   currentApplication: ApplicationSummaryResponse | null;
   decisionItems: string[];
   finalDossier: ApplicationFinalDossierResponse | null;
+  finalDossierDocumentFileName: string | null;
+  finalDossierDocumentHtml: string | null;
   expertAssignmentStatus: number | null;
   expertDecisionStatus: number | null;
   expertQueueCount: number | null;
@@ -51,11 +53,13 @@ interface ReviewWorkspaceProps {
   onApproveCommittee: () => void;
   onApproveExpert: () => void;
   onAssignExpert: () => void;
+  onDownloadFinalDossierDocument: () => void;
   onFetchAgendaQueue: () => void;
   onFetchFinalDossier: () => void;
   onFetchExpertQueue: () => void;
   onFetchPackageQueue: () => void;
   onPreparePackage: () => void;
+  onPreviewFinalDossierDocument: () => void;
   onProvisionRoles: () => void;
   onRequestCommitteeRevision: () => void;
   onRequestExpertRevision: () => void;
@@ -102,6 +106,8 @@ export function ReviewWorkspace({
   currentApplication,
   decisionItems,
   finalDossier,
+  finalDossierDocumentFileName,
+  finalDossierDocumentHtml,
   expertAssignmentStatus,
   expertDecisionStatus,
   expertQueueCount,
@@ -118,11 +124,13 @@ export function ReviewWorkspace({
   onApproveCommittee,
   onApproveExpert,
   onAssignExpert,
+  onDownloadFinalDossierDocument,
   onFetchAgendaQueue,
   onFetchFinalDossier,
   onFetchExpertQueue,
   onFetchPackageQueue,
   onPreparePackage,
+  onPreviewFinalDossierDocument,
   onProvisionRoles,
   onRequestCommitteeRevision,
   onRequestExpertRevision,
@@ -149,6 +157,7 @@ export function ReviewWorkspace({
   const canCommitteeResponse = reviewReady && currentStep === "CommitteeRevisionRequested" && committeeRevisionStatus === 200 && committeeRevisionResponseStatus !== 200 && !busy;
   const canCommitteeApprove = canUseSecretariat && currentStep === "UnderCommitteeReview" && committeeRevisionResponseStatus === 200 && committeeDecisionStatus !== 200;
   const dossierBusy = busyAction === "fetch-final-dossier";
+  const dossierDocumentBusy = busyAction === "fetch-final-dossier-document";
   const finalDossierReady = finalDossier?.isReady ?? (committeeDecisionStatus === 200 || currentStep === "Approved" || currentStep === "Rejected");
   const finalDossierPackaged = finalDossier
     ? finalDossier.dossierStatus !== "not_ready" && finalDossier.dossierStatus !== "package_pending"
@@ -302,6 +311,22 @@ export function ReviewWorkspace({
           >
             {dossierBusy ? "Dosya okunuyor" : "Dosya ozeti getir"}
           </button>
+          <button
+            type="button"
+            className="button"
+            disabled={!finalDossier?.isReady || dossierDocumentBusy}
+            onClick={onPreviewFinalDossierDocument}
+          >
+            {dossierDocumentBusy ? "HTML uretiliyor" : "HTML onizle"}
+          </button>
+          <button
+            type="button"
+            className="button button--ghost"
+            disabled={!finalDossier?.isReady || dossierDocumentBusy}
+            onClick={onDownloadFinalDossierDocument}
+          >
+            HTML indir
+          </button>
           {finalDossier ? (
             <div className="final-dossier-card__facts">
               <div><span>Paket</span><strong>{shortId(finalDossier.reviewPackageId)}</strong></div>
@@ -316,6 +341,19 @@ export function ReviewWorkspace({
             {finalDossier.includedSections.slice(0, 6).map((section) => (
               <span key={section}>{section}</span>
             ))}
+          </div>
+        ) : null}
+        {finalDossierDocumentHtml ? (
+          <div className="final-dossier-card__preview">
+            <div className="message-preview__header">
+              <span>HTML karar dosyasi</span>
+              <strong>{finalDossierDocumentFileName ?? "hazir"}</strong>
+            </div>
+            <iframe
+              title="Kurul karar dosyasi onizleme"
+              sandbox=""
+              srcDoc={finalDossierDocumentHtml}
+            />
           </div>
         ) : null}
       </section>

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using EtikKurul.Api.Authentication;
 using EtikKurul.Api.Authorization;
@@ -84,6 +85,26 @@ public class ApplicationsController(IApplicationService applicationService) : Co
             result.ApplicantRevisionResponseCount,
             result.CommitteeRevisionResponseCount,
             result.IncludedSections));
+    }
+
+    [HttpGet("{id:guid}/final-dossier/document")]
+    [Produces("text/html")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DownloadFinalDossierDocument(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await applicationService.GetFinalDossierDocumentAsync(userId, id, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return File(Encoding.UTF8.GetBytes(result.Html), result.ContentType, result.FileName);
     }
 
     [Authorize(Policy = ApplicationPolicies.CanOpenApplication)]

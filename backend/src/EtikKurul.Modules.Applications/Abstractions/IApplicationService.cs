@@ -9,6 +9,7 @@ public interface IApplicationService
     Task<IReadOnlyList<ApplicationSummaryResult>> ListMineAsync(Guid userId, CancellationToken cancellationToken);
     Task<ApplicationSummaryResult> GetOwnedAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken);
     Task<ApplicationFinalDossierResult> GetFinalDossierAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken);
+    Task<ApplicationFinalDossierDocumentResult> GetFinalDossierDocumentAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken);
     Task<ApplicationSummaryResult> CreateAsync(CreateApplicationCommand command, CancellationToken cancellationToken);
     Task<ApplicationSummaryResult> SetEntryModeAsync(SetApplicationEntryModeCommand command, CancellationToken cancellationToken);
     Task<RoutingAssessmentResult> SaveIntakeAsync(SaveApplicationIntakeCommand command, CancellationToken cancellationToken);

@@ -920,6 +920,15 @@ public class AuthAndProfileFlowTests : IClassFixture<TestWebApplicationFactory>
         Assert.Equal(committeeDecisionPayload.DecisionId, finalDossierPayload.CommitteeDecisionId);
         Assert.Equal(ApplicationCommitteeDecisionType.Approved, finalDossierPayload.CommitteeDecisionType);
         Assert.Contains("Kurul karar kayitlari", finalDossierPayload.IncludedSections);
+
+        var finalDossierDocumentResponse = await client.GetAsync($"/applications/{createApplicationPayload.ApplicationId}/final-dossier/document");
+        finalDossierDocumentResponse.EnsureSuccessStatusCode();
+        Assert.Equal("text/html", finalDossierDocumentResponse.Content.Headers.ContentType?.MediaType);
+        var finalDossierDocumentHtml = await finalDossierDocumentResponse.Content.ReadAsStringAsync();
+        Assert.Contains("Kurul Karar Dosyasi", finalDossierDocumentHtml);
+        Assert.Contains("Uzman Kuyruk Testi", finalDossierDocumentHtml);
+        Assert.Contains("Committee integration approval.", finalDossierDocumentHtml);
+        Assert.DoesNotContain(applicantRegisterRequest.Tckn, finalDossierDocumentHtml);
     }
 
     [Fact]

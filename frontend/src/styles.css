@@ -943,6 +943,23 @@ button {
   font-weight: 800;
 }
 
+.final-dossier-card__preview {
+  flex-basis: 100%;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 23, 16, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.final-dossier-card__preview iframe {
+  width: 100%;
+  min-height: 420px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffaf2;
+}
+
 .operation-card h4 {
   margin: 6px 0 0;
   font-family: "Newsreader", serif;
