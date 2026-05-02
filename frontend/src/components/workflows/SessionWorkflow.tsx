@@ -121,7 +121,7 @@ function getSessionPanelCopy(workflowView: WorkflowView) {
   return {
     number: "04",
     title: "Inceleme ve kurul sureci",
-    description: "Submit sonrasi uzman, sekretarya, paket, gundem, revizyon ve kurul karari akisini calistirin.",
+    description: "Submit sonrasi uzman incelemesi, sekretarya dosya paketi, kurul gundemi, revizyon ve karar akisini calistirin.",
   };
 }
 
@@ -369,8 +369,8 @@ export function SessionWorkflow({
                 <div><span>Expert review</span><strong>{formatExpertWorkflowStatus(expertReviewStatus, expertReviewState)}</strong></div>
                 <div><span>Revision response</span><strong>{formatExpertWorkflowStatus(revisionResponseStatus, revisionResponseState)}</strong></div>
                 <div><span>Expert decision</span><strong>{formatExpertWorkflowStatus(expertDecisionStatus, expertDecisionState)}</strong></div>
-                <div><span>Package queue</span><strong>{packageQueueCount ?? "Calismadi"}</strong></div>
-                <div><span>Package</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
+                <div><span>Dosya paketi kuyrugu</span><strong>{packageQueueCount ?? "Calismadi"}</strong></div>
+                <div><span>Son inceleme paketi</span><strong>{formatExpertWorkflowStatus(packageStatus, packageState)}</strong></div>
                 <div><span>Agenda</span><strong>{formatExpertWorkflowStatus(agendaStatus, agendaState)}</strong></div>
                 <div><span>Committee revision</span><strong>{formatExpertWorkflowStatus(committeeRevisionStatus, committeeRevisionState)}</strong></div>
                 <div><span>Committee response</span><strong>{formatExpertWorkflowStatus(committeeRevisionResponseStatus, committeeRevisionResponseState)}</strong></div>

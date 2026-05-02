@@ -163,12 +163,12 @@ export function getReviewStageCards({
       tone: completedTone(complete, expertDecisionStatus),
     },
     {
-      description: "Secretariat paketleme kuyrugunu kontrol eder ve kurul paketini hazirlar.",
+      description: "Secretariat paketleme kuyrugunu kontrol eder ve kurul dosyasinin son inceleme paketini hazirlar.",
       number: "06",
       status: packageQueueCount === null
         ? completedStatus(complete, packageStatus, packageState)
         : `${packageQueueCount} kuyruk / ${completedStatus(complete, packageStatus, packageState)}`,
-      title: "Paket hazirligi",
+      title: "Kurul dosyasi",
       tone: completedTone(complete, packageStatus),
     },
     {

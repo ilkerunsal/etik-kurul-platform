@@ -127,6 +127,13 @@ export function ReviewWorkspace({
   const canCommitteeRevision = canUseSecretariat && currentStep === "UnderCommitteeReview" && agendaStatus === 200 && committeeRevisionStatus !== 200;
   const canCommitteeResponse = reviewReady && currentStep === "CommitteeRevisionRequested" && committeeRevisionStatus === 200 && committeeRevisionResponseStatus !== 200 && !busy;
   const canCommitteeApprove = canUseSecretariat && currentStep === "UnderCommitteeReview" && committeeRevisionResponseStatus === 200 && committeeDecisionStatus !== 200;
+  const finalDossierReady = committeeDecisionStatus === 200 || currentStep === "Approved";
+  const finalDossierPackaged = finalDossierReady || packageStatus === 200 || currentStep === "PackageReady" || currentStep === "UnderCommitteeReview";
+  const finalDossierStatus = finalDossierReady
+    ? "Karar dosyasi hazir"
+    : finalDossierPackaged
+      ? "Kurul paketi hazir"
+      : "Paket bekleniyor";
 
   return (
     <div className="review-workspace">
@@ -239,6 +246,28 @@ export function ReviewWorkspace({
           </div>
         </section>
       </div>
+
+      <section className={`final-dossier-card${finalDossierReady ? " final-dossier-card--ready" : ""}`}>
+        <div>
+          <span className="eyebrow">Son dosya</span>
+          <h4>Kurul karar dosyasi</h4>
+          <p>
+            Sistem dogrulamasi, uzman incelemesi, revizyon yanitlari ve kurul karari ayni basvuru kaydinda
+            birikir. Sekretarya paket hazirladiginda kurul dosyasi olusur; kurul onayindan sonra karar dosyasi
+            son haline gelir.
+          </p>
+        </div>
+        <div className="final-dossier-card__status">
+          <strong>{finalDossierStatus}</strong>
+          <small>
+            {finalDossierReady
+              ? "Approved karar kaydi ile son dosya kapatildi."
+              : finalDossierPackaged
+                ? "Dosya kurul gundemi ve karar adimini bekliyor."
+                : "Uzman onayi sonrasi paket hazirlanacak."}
+          </small>
+        </div>
+      </section>
 
       <div className="application-stage-grid" aria-label="Uzman ve kurul adimlari">
         {stageCards.map((card) => (

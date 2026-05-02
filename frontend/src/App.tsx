@@ -464,6 +464,24 @@ export default function App() {
           return;
         }
 
+        if (isApiErrorStatus(error, 401)) {
+          startTransition(() => {
+            setSessionToken("");
+            setSessionExpiresAt(null);
+            setCurrentUser(null);
+            setSecretariatSession(null);
+            setExpertSession(null);
+            setWorkflowView("profile");
+          });
+          setBanner({
+            tone: "neutral",
+            title: "Oturum suresi doldu",
+            detail: "Kayit, profil ve basvuru izleri korundu. Devam etmek icin tekrar login olun.",
+          });
+          pushActivity("Suresi dolan JWT temizlendi; kullanici tekrar login olmali.", "neutral");
+          return;
+        }
+
         setBanner({
           tone: "error",
           title: "Oturum yenilenemedi",

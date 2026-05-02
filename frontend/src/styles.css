@@ -850,6 +850,56 @@ button {
   grid-column: 1 / -1;
 }
 
+.final-dossier-card {
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  border: 1px solid rgba(27, 107, 109, 0.2);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(27, 107, 109, 0.16), transparent 38%),
+    linear-gradient(135deg, rgba(255, 250, 242, 0.88), rgba(249, 255, 252, 0.88));
+}
+
+.final-dossier-card--ready {
+  border-color: rgba(18, 99, 78, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(18, 99, 78, 0.18), transparent 38%),
+    rgba(249, 255, 252, 0.92);
+}
+
+.final-dossier-card h4 {
+  margin: 6px 0 8px;
+  font-family: "Newsreader", serif;
+  font-size: clamp(1.6rem, 2vw, 2.25rem);
+  line-height: 1;
+}
+
+.final-dossier-card p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--muted);
+}
+
+.final-dossier-card__status {
+  min-width: 210px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.final-dossier-card__status strong,
+.final-dossier-card__status small {
+  display: block;
+}
+
+.final-dossier-card__status small {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
 .operation-card h4 {
   margin: 6px 0 0;
   font-family: "Newsreader", serif;
@@ -1135,6 +1185,7 @@ button {
   .workspace-header,
   .actions,
   .completion-card__header,
+  .final-dossier-card,
   .message-preview__header,
   .message-preview__footer,
   .section-heading {
